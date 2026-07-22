@@ -1,7 +1,12 @@
 import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { loadExternalAccountDraft } from "./authProvider";
 import { DATA_DIR, LEGACY_DATA_DIR } from "./config";
 import type { Account, AccountStoreData, ProviderConfig } from "./providers/types";
+
+// Stable id for the ephemeral account synthesised from an external credential
+// (env token / gh CLI) in non-device auth modes.
+const EXTERNAL_ACCOUNT_ID = "external";
 
 const ACCOUNTS_PATH = resolve(DATA_DIR, "accounts.json");
 const ACCOUNTS_TMP_PATH = resolve(DATA_DIR, "accounts.json.tmp");
@@ -180,8 +185,40 @@ async function ensureState(): Promise<InternalState> {
   return state;
 }
 
+/**
+ * Seed (or refresh) the ephemeral external account from the current auth mode.
+ *
+ * In `token` / `gh-cli` modes the credential never reaches the on-disk store,
+ * so without this the store stays empty and every data endpoint returns 401
+ * even though `/api/auth/status` reports the token as authenticated. In
+ * `device` mode (or when the external token is gone) this is a no-op that also
+ * drops any previously-seeded external account.
+ */
+async function ensureExternalAccount(s: InternalState): Promise<void> {
+  const draft = await loadExternalAccountDraft();
+  if (!draft) {
+    s.ephemeral = s.ephemeral.filter((account) => account.id !== EXTERNAL_ACCOUNT_ID);
+    return;
+  }
+  const existing = s.ephemeral.find((account) => account.id === EXTERNAL_ACCOUNT_ID);
+  const account: Account = {
+    id: EXTERNAL_ACCOUNT_ID,
+    providerKind: "github",
+    providerConfigId: "github.com",
+    label: draft.login ? `${draft.login} (${draft.source})` : `GitHub (${draft.source})`,
+    login: draft.login,
+    accessToken: draft.token,
+    scope: draft.scope ?? "",
+    obtainedAt: existing?.obtainedAt ?? new Date().toISOString(),
+    source: draft.source,
+    ephemeral: true,
+  };
+  s.ephemeral = [...s.ephemeral.filter((entry) => entry.id !== EXTERNAL_ACCOUNT_ID), account];
+}
+
 export async function list(): Promise<Account[]> {
   const s = await ensureState();
+  await ensureExternalAccount(s);
   return [...s.persisted.accounts, ...s.ephemeral];
 }
 
@@ -192,6 +229,7 @@ export async function get(id: string): Promise<Account | null> {
 
 export async function getActive(): Promise<Account | null> {
   const s = await ensureState();
+  await ensureExternalAccount(s);
   const activeId = s.persisted.activeId;
   if (activeId) {
     const persisted = s.persisted.accounts.find((account) => account.id === activeId);

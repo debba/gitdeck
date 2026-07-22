@@ -17,7 +17,13 @@ vi.mock("../../src/server/config", () => ({
   LEGACY_DATA_DIR: LEGACY_TMP_DIR,
 }));
 
+vi.mock("../../src/server/authProvider", () => ({
+  loadExternalAccountDraft: vi.fn(async () => null),
+}));
+
 const store = await import("../../src/server/accountStore");
+const { loadExternalAccountDraft } = await import("../../src/server/authProvider");
+const mockedDraft = loadExternalAccountDraft as unknown as ReturnType<typeof vi.fn>;
 
 const ACCOUNTS_PATH = resolve(TMP_DIR, "accounts.json");
 const LEGACY_TOKEN_PATH = resolve(TMP_DIR, "auth.json");
@@ -50,6 +56,9 @@ describe("accountStore", () => {
   beforeEach(async () => {
     store.resetForTesting();
     await rm(TMP_DIR, { recursive: true, force: true });
+    // Default to device mode (no external credential) for existing cases.
+    mockedDraft.mockReset();
+    mockedDraft.mockResolvedValue(null);
   });
 
   it("bootstraps empty when no legacy file exists", async () => {
@@ -133,6 +142,45 @@ describe("accountStore", () => {
     await store.remove(b.id);
     const active = await store.getActive();
     expect(active?.id).toBe(a.id);
+  });
+
+  it("seeds an ephemeral external account in token/gh-cli mode", async () => {
+    // Regression: in token/gh-cli mode the store is never populated from disk,
+    // so getActive() returned null and every data endpoint 401'd even though
+    // /api/auth/status reported the token as authenticated.
+    mockedDraft.mockResolvedValue({
+      token: "ghp_regression",
+      login: "octocat",
+      scope: "repo, read:org",
+      source: "env",
+    });
+    await store.init();
+
+    const active = await store.getActive();
+    expect(active).not.toBeNull();
+    expect(active?.id).toBe("external");
+    expect(active?.accessToken).toBe("ghp_regression");
+    expect(active?.login).toBe("octocat");
+    expect(active?.scope).toBe("repo, read:org");
+    expect(active?.source).toBe("env");
+    expect(active?.ephemeral).toBe(true);
+    expect(active?.providerConfigId).toBe("github.com");
+
+    const all = await store.list();
+    expect(all).toHaveLength(1);
+    // The external account is ephemeral — never written to disk.
+    expect(await fileExists(ACCOUNTS_PATH)).toBe(false);
+  });
+
+  it("drops the ephemeral external account when the credential disappears", async () => {
+    mockedDraft.mockResolvedValue({ token: "t", login: "x", scope: "", source: "gh-cli" });
+    await store.init();
+    expect((await store.getActive())?.id).toBe("external");
+
+    // Token unset / gh logout at runtime -> no draft.
+    mockedDraft.mockResolvedValue(null);
+    expect(await store.getActive()).toBeNull();
+    expect(await store.list()).toEqual([]);
   });
 
   it("does not persist ephemeral accounts", async () => {
