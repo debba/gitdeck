@@ -39,7 +39,7 @@ export function RepoGrid({ repos, issues, insightsByRepo, onRepoClick, onIssuesC
             }}
           >
             <div className="rc-head">
-              <Avatar login={repo.owner.login} size={28} />
+              <Avatar login={repo.owner.login} avatarUrl={repo.owner.avatarUrl} size={28} />
               <div className="rc-title">
                 <a href={repo.url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}><span className="owner">{repo.owner.login}</span><span className="slash">/</span>{repo.name}</a>
               </div>

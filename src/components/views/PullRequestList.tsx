@@ -25,7 +25,7 @@ export function PullRequestList({ pullRequests }: { pullRequests: GhPullRequest[
         const author = pr.author?.login || "unknown";
         return (
           <a className="data-row" href={pr.url} key={pr.url} target="_blank" rel="noreferrer">
-            <Avatar login={pr.author?.login} size={36} />
+            <Avatar login={pr.author?.login} avatarUrl={pr.author?.avatarUrl} size={36} />
             <div className="data-row-body">
               <div className="data-row-top">
                 <strong className="data-row-author">{author}</strong>
@@ -60,7 +60,7 @@ export function PullRequestList({ pullRequests }: { pullRequests: GhPullRequest[
                 {pr.assignees && pr.assignees.length ? (
                   <span className="data-row-assignees">
                     {pr.assignees.slice(0, 3).map((assignee) => (
-                      <Avatar key={assignee.login} login={assignee.login} size={18} />
+                      <Avatar key={assignee.login} login={assignee.login} avatarUrl={assignee.avatarUrl} size={18} />
                     ))}
                   </span>
                 ) : null}
