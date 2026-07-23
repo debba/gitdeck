@@ -522,7 +522,7 @@ query($q: String!, $cursor: String) {
       __typename
       ... on Issue {
         number title url createdAt updatedAt
-        author { login url }
+        author { login url avatarUrl }
         repository { name nameWithOwner }
         labels(first: 20) { nodes { name color description } }
         comments { totalCount }
@@ -542,7 +542,7 @@ query($q: String!, $cursor: String) {
       ... on PullRequest {
         number title url createdAt updatedAt
         isDraft reviewDecision
-        author { login url }
+        author { login url avatarUrl }
         repository { name nameWithOwner }
         labels(first: 20) { nodes { name color description } }
         comments { totalCount }
@@ -562,7 +562,7 @@ interface IssueSearchNode {
   url: string;
   createdAt: string;
   updatedAt: string;
-  author: { login: string; url: string } | null;
+  author: { login: string; url: string; avatarUrl?: string } | null;
   repository: { name: string; nameWithOwner: string };
   labels: { nodes: GhLabel[] };
   comments: { totalCount: number };
@@ -585,7 +585,7 @@ interface PullRequestSearchNode {
   updatedAt: string;
   isDraft: boolean;
   reviewDecision: ReviewDecision;
-  author: { login: string; url: string } | null;
+  author: { login: string; url: string; avatarUrl?: string } | null;
   repository: { name: string; nameWithOwner: string };
   labels: { nodes: GhLabel[] };
   comments: { totalCount: number };

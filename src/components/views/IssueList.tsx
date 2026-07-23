@@ -18,7 +18,7 @@ export function IssueList({ issues }: { issues: GhIssue[] }) {
         const author = issue.author?.login || "unknown";
         return (
           <a className="data-row" href={issue.url} key={issue.url} target="_blank" rel="noreferrer">
-            <Avatar login={issue.author?.login} size={36} />
+            <Avatar login={issue.author?.login} avatarUrl={issue.author?.avatarUrl} size={36} />
             <div className="data-row-body">
               <div className="data-row-top">
                 <strong className="data-row-author">{author}</strong>
@@ -50,7 +50,7 @@ export function IssueList({ issues }: { issues: GhIssue[] }) {
                 {issue.assignees && issue.assignees.length ? (
                   <span className="data-row-assignees">
                     {issue.assignees.slice(0, 3).map((assignee) => (
-                      <Avatar key={assignee.login} login={assignee.login} size={18} />
+                      <Avatar key={assignee.login} login={assignee.login} avatarUrl={assignee.avatarUrl} size={18} />
                     ))}
                   </span>
                 ) : null}

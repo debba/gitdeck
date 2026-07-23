@@ -123,7 +123,7 @@ function TriagePreview({ item, repo, onRepoClick, onMarkRead }: TriagePreviewPro
     <section className="inbox-reader">
       <header className="inbox-reader-head">
         <div className="inbox-reader-from">
-          <Avatar login={item.author?.login} size={48} />
+          <Avatar login={item.author?.login} avatarUrl={item.author?.avatarUrl} size={48} />
           <div className="inbox-reader-from-meta">
             <strong>{item.author?.login || "Unknown"}</strong>
             <span>
@@ -484,7 +484,7 @@ export function TriageWorkspace({
                 <span className="inbox-row-indicator" aria-hidden="true">
                   {item.unread ? <span className="inbox-row-dot" /> : null}
                 </span>
-                <Avatar login={item.author?.login} size={density === "compact" ? 28 : 36} />
+                <Avatar login={item.author?.login} avatarUrl={item.author?.avatarUrl} size={density === "compact" ? 28 : 36} />
                 <div className="inbox-row-body">
                   <div className="inbox-row-top">
                     <strong className="inbox-row-author">{item.author?.login || "Unknown"}</strong>
