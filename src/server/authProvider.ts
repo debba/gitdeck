@@ -94,6 +94,41 @@ async function loadEnvToken(): Promise<CachedToken> {
   return envCache;
 }
 
+export interface ExternalAccountDraft {
+  token: string;
+  login: string | null;
+  scope: string | null;
+  source: "env" | "gh-cli";
+}
+
+/**
+ * Resolve an external account draft for the current auth mode.
+ *
+ * In `token` and `gh-cli` modes the credential lives outside the on-disk
+ * account store (env var / gh CLI), so the store is never populated and the
+ * data layer has no active account to resolve. This exposes the external
+ * credential as a draft the account store can seed as an ephemeral account.
+ *
+ * Returns `null` in `device` mode, or when no external token is available
+ * (the status endpoint surfaces the underlying error separately).
+ */
+export async function loadExternalAccountDraft(): Promise<ExternalAccountDraft | null> {
+  const mode = getAuthMode();
+  try {
+    if (mode === "token") {
+      const cached = await loadEnvToken();
+      return { token: cached.token, login: cached.login, scope: cached.scope, source: "env" };
+    }
+    if (mode === "gh-cli") {
+      const cached = await loadGhCliToken();
+      return { token: cached.token, login: cached.login, scope: cached.scope, source: "gh-cli" };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 export async function getActiveAccount(): Promise<Account | null> {
   await initAccountStore();
   return getActiveAccountFromStore();
