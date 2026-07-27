@@ -1,3 +1,11 @@
+## [1.0.5](https://github.com/debba/gh-dashboard/compare/v1.0.4...v1.0.5) (2026-07-27)
+
+
+### Bug Fixes
+
+* **auth:** resolve active account from external token in token/gh-cli mode ([1a44c21](https://github.com/debba/gh-dashboard/commit/1a44c211642dc1337b012205d5cf14b33a519b23)), closes [token/#cli](https://github.com/debba/gh-dashboard/issues/cli) [#cli](https://github.com/debba/gh-dashboard/issues/cli)
+* load bot and GitHub App avatars from the API avatar URL ([2962a37](https://github.com/debba/gh-dashboard/commit/2962a37154bc9c993b7c1b21aeaae09dcba17461))
+
 ## [1.0.4](https://github.com/debba/gh-dashboard/compare/v1.0.2...v1.0.4) (2026-05-21)
 
 
