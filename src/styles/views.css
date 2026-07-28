@@ -442,6 +442,8 @@
   .rb.private { color: #ffd79a; background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.25); }
   .rb.archived { color: #fca5a5; background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.25); }
   .rb.fork { color: #a5b4fc; background: rgba(129,140,248,0.08); border-color: rgba(129,140,248,0.25); }
+  .rb.prerelease { color: #fdba74; background: rgba(249,115,22,0.08); border-color: rgba(249,115,22,0.25); }
+  .rb.draft { color: #9ca3af; background: rgba(156,163,175,0.08); border-color: rgba(156,163,175,0.3); }
 
   .repo-desc { font-size: 13px; color: var(--muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .repo-health-row {

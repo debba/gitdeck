@@ -17,7 +17,7 @@ import { isValidRepoName } from "../../utils/aliasQuery";
 import { formatBytes, formatNumber, formatRelativeTime } from "../../utils/format";
 import { clampPage } from "../../utils/pagination";
 import { Pagination } from "../common/Pagination";
-import { CloseIcon, ForkIcon, IssueIcon, StarIcon } from "../common/Icons";
+import { CloseIcon, ForkIcon, IssueIcon, RefreshIcon, StarIcon } from "../common/Icons";
 
 interface RepositoryDetailsModalProps {
   repo: GhRepo;
@@ -30,6 +30,8 @@ interface RepositoryDetailsModalProps {
 }
 
 export type DetailTab = "overview" | "actions" | "pull-requests" | "issues" | "releases" | "forks" | "traffic" | "mentions" | "dependents";
+
+type ReleaseFilter = "all" | "stable" | "prerelease" | "draft";
 
 const MODAL_PAGE_SIZE = 10;
 
@@ -101,6 +103,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
   const [repoPrsPage, setRepoPrsPage] = useState(1);
   const [repoPrsPageSize, setRepoPrsPageSize] = useState(MODAL_PAGE_SIZE);
   const [releasesPage, setReleasesPage] = useState(1);
+  const [releaseFilter, setReleaseFilter] = useState<ReleaseFilter>("all");
   const [openReleaseIds, setOpenReleaseIds] = useState<number[]>([]);
   const [forks, setForks] = useState<ForkNode[]>([]);
   const [forksTotal, setForksTotal] = useState(0);
@@ -116,7 +119,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
   const [aliasInput, setAliasInput] = useState("");
   const [aliasError, setAliasError] = useState("");
   const [aliasBusy, setAliasBusy] = useState(false);
-  const [mentionsRefreshKey, setMentionsRefreshKey] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,7 +154,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
     return () => {
       cancelled = true;
     };
-  }, [repo.nameWithOwner, mentionsRefreshKey]);
+  }, [repo.nameWithOwner, refreshKey]);
 
   useEffect(() => {
     setContributorsPage(1);
@@ -161,6 +164,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
     setRepoIssuesPage(1);
     setRepoPrsPage(1);
     setReleasesPage(1);
+    setReleaseFilter("all");
     setForksPage(1);
     setOpenReleaseIds([]);
   }, [repo.nameWithOwner]);
@@ -186,7 +190,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
     return () => {
       cancelled = true;
     };
-  }, [activeTab, forkDirection, forkField, repo.nameWithOwner]);
+  }, [activeTab, forkDirection, forkField, repo.nameWithOwner, refreshKey]);
 
   function toggleRelease(releaseId: number) {
     setOpenReleaseIds((current) =>
@@ -215,7 +219,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
       const result = await addRepoAlias(repo.nameWithOwner, value);
       setAliases(result.aliases);
       setAliasInput("");
-      setMentionsRefreshKey((value) => value + 1);
+      setRefreshKey((value) => value + 1);
     } catch (err) {
       setAliasError((err as Error).message);
     } finally {
@@ -229,7 +233,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
     try {
       const result = await removeRepoAlias(repo.nameWithOwner, alias);
       setAliases(result.aliases);
-      setMentionsRefreshKey((value) => value + 1);
+      setRefreshKey((value) => value + 1);
     } catch (err) {
       setAliasError((err as Error).message);
     } finally {
@@ -252,6 +256,22 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
   const workflows = details?.workflows ?? [];
   const security = details?.security ?? null;
   const totalReleaseDownloads = releases.reduce((sum, release) => sum + release.totalDownloads, 0);
+  const stableReleases = releases.filter((release) => !release.prerelease && !release.draft);
+  const preReleases = releases.filter((release) => release.prerelease && !release.draft);
+  const draftReleases = releases.filter((release) => release.draft);
+  const filteredReleases = releaseFilter === "stable"
+    ? stableReleases
+    : releaseFilter === "prerelease"
+      ? preReleases
+      : releaseFilter === "draft"
+        ? draftReleases
+        : releases;
+  const releaseFilters: { key: ReleaseFilter; label: string; count: number }[] = [
+    { key: "all", label: "All", count: releases.length },
+    { key: "stable", label: "Releases", count: stableReleases.length },
+    { key: "prerelease", label: "Pre-releases", count: preReleases.length },
+    { key: "draft", label: "Drafts", count: draftReleases.length },
+  ];
   const repoDigest = details?.digest ?? null;
   const releasesPageSize = 10;
   const referrers = trafficDetails?.referrers ?? [];
@@ -267,7 +287,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
   const safeDependentsPage = clampPage(dependentsPage, dependents.length, dependentsPageSize);
   const safeRepoIssuesPage = clampPage(repoIssuesPage, repoIssues.length, repoIssuesPageSize);
   const safeRepoPrsPage = clampPage(repoPrsPage, repoPullRequests.length, repoPrsPageSize);
-  const safeReleasesPage = clampPage(releasesPage, releases.length, releasesPageSize);
+  const safeReleasesPage = clampPage(releasesPage, filteredReleases.length, releasesPageSize);
   const safeForksPage = clampPage(forksPage, forks.length, forksPageSize);
   const pagedContributors = contributors.slice((safeContributorsPage - 1) * MODAL_PAGE_SIZE, safeContributorsPage * MODAL_PAGE_SIZE);
   const pagedMentionItems = mentionItems.slice((safeMentionsPage - 1) * mentionsPageSize, safeMentionsPage * mentionsPageSize);
@@ -275,7 +295,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
   const pagedDependents = dependents.slice((safeDependentsPage - 1) * dependentsPageSize, safeDependentsPage * dependentsPageSize);
   const pagedRepoIssues = repoIssues.slice((safeRepoIssuesPage - 1) * repoIssuesPageSize, safeRepoIssuesPage * repoIssuesPageSize);
   const pagedRepoPrs = repoPullRequests.slice((safeRepoPrsPage - 1) * repoPrsPageSize, safeRepoPrsPage * repoPrsPageSize);
-  const pagedReleases = releases.slice((safeReleasesPage - 1) * releasesPageSize, safeReleasesPage * releasesPageSize);
+  const pagedReleases = filteredReleases.slice((safeReleasesPage - 1) * releasesPageSize, safeReleasesPage * releasesPageSize);
   const pagedForks = forks.slice((safeForksPage - 1) * forksPageSize, safeForksPage * forksPageSize);
   const starHistory = (repo.history || []).map((entry) => entry.stars);
   const forkHistory = (repo.history || []).map((entry) => entry.forks);
@@ -305,7 +325,16 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
               <h3>{repo.nameWithOwner}</h3>
             </div>
           </div>
-          <button className="modal-close" aria-label="Close" onClick={onClose}><CloseIcon /></button>
+          <div className="modal-head-actions">
+            <button
+              className={`modal-close modal-refresh ${loading ? "refreshing" : ""}`}
+              aria-label="Reload repository data"
+              title="Reload repository data"
+              disabled={loading}
+              onClick={() => setRefreshKey((value) => value + 1)}
+            ><RefreshIcon /></button>
+            <button className="modal-close" aria-label="Close" onClick={onClose}><CloseIcon /></button>
+          </div>
         </header>
 
         <div className="modal-body repo-detail-body">
@@ -671,11 +700,29 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
               </div>
               <div className="repo-detail-traffic-card">
                 <span className="repo-detail-traffic-label">Latest release</span>
-                <strong>{releases[0]?.tag_name || "n/a"}</strong>
-                <em>{releases[0] ? formatReleaseDate(releases[0].published_at) : "No release published."}</em>
+                <strong>{(stableReleases[0] ?? releases[0])?.tag_name || "n/a"}</strong>
+                <em>{(stableReleases[0] ?? releases[0]) ? formatReleaseDate((stableReleases[0] ?? releases[0]).published_at) : "No release published."}</em>
               </div>
             </div>
             {releases.length ? (
+              <div className="repo-detail-release-filters" role="group" aria-label="Filter releases by type">
+                {releaseFilters.filter((item) => item.key === "all" || item.count > 0).map((item) => (
+                  <button
+                    type="button"
+                    key={item.key}
+                    className={releaseFilter === item.key ? "active" : ""}
+                    onClick={() => {
+                      setReleaseFilter(item.key);
+                      setReleasesPage(1);
+                    }}
+                  >
+                    <span>{item.label}</span>
+                    <strong>{formatNumber(item.count)}</strong>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {filteredReleases.length ? (
               <div className="repo-detail-releases">
                 {pagedReleases.map((release) => (
                   <div className="repo-detail-release" key={release.id}>
@@ -686,7 +733,10 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                       aria-expanded={openReleaseIds.includes(release.id)}
                     >
                       <div>
-                        <strong>{release.name || release.tag_name}</strong>
+                        <span className="repo-detail-release-title">
+                          <strong>{release.name || release.tag_name}</strong>
+                          {release.draft ? <span className="rb draft">Draft</span> : release.prerelease ? <span className="rb prerelease">Pre-release</span> : null}
+                        </span>
                         <span>{release.tag_name} · {formatReleaseDate(release.published_at)}</span>
                       </div>
                       <span>{formatNumber(release.totalDownloads)} downloads</span>
@@ -720,9 +770,10 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
               </div>
             ) : null}
             {!loading && !releases.length ? <div className="modal-empty sub">No releases available.</div> : null}
-            {releases.length ? (
+            {!loading && releases.length && !filteredReleases.length ? <div className="modal-empty sub">No releases in this category.</div> : null}
+            {filteredReleases.length ? (
               <Pagination
-                totalItems={releases.length}
+                totalItems={filteredReleases.length}
                 page={safeReleasesPage}
                 pageSize={releasesPageSize}
                 onPageChange={setReleasesPage}
