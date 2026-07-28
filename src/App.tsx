@@ -90,7 +90,7 @@ const TAB_ROUTES: Record<Tab, string> = {
 };
 
 const ROUTE_TABS = new Map<string, Tab>(Object.entries(TAB_ROUTES).map(([tab, route]) => [route, tab as Tab]));
-const DETAIL_TABS = new Set<DetailTab>(["overview", "actions", "pull-requests", "issues", "releases", "forks", "traffic", "mentions", "dependents"]);
+const DETAIL_TABS = new Set<DetailTab>(["overview", "actions", "commits", "pull-requests", "issues", "milestones", "releases", "branches", "forks", "traffic", "mentions", "discussions", "dependents"]);
 const METRIC_KINDS = new Set<MetricKind>(["stars", "forks"]);
 
 function tabFromPath(pathname: string): Tab {

@@ -13,7 +13,9 @@ import type {
   ProjectDetails,
   ProjectSummary,
   PullRequestsData,
+  RepoBranch,
   RepoDetailsData,
+  RepoDiscussion,
   RepoInsightsData,
   ReposData,
   RepoTrafficDetails,
@@ -199,6 +201,16 @@ export function fetchForks(params: {
 export function fetchRepoDetails(repo: string): Promise<RepoDetailsData> {
   const query = new URLSearchParams({ repo });
   return readJson(`/api/repo-details?${query.toString()}`);
+}
+
+export function fetchRepoBranches(repo: string): Promise<{ ok: true; totalCount: number; defaultBranch: string | null; branches: RepoBranch[] }> {
+  const query = new URLSearchParams({ repo });
+  return readJson(`/api/repo-branches?${query.toString()}`);
+}
+
+export function fetchRepoDiscussions(repo: string): Promise<{ ok: true; enabled: boolean; totalCount: number; discussions: RepoDiscussion[] }> {
+  const query = new URLSearchParams({ repo });
+  return readJson(`/api/repo-discussions?${query.toString()}`);
 }
 
 export function fetchMentionIssues(repo: string): Promise<{ ok: true; items: MentionIssueItem[]; totalCount: number; aliases: string[] }> {

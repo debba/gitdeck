@@ -206,8 +206,59 @@ export interface RepoRelease {
   prerelease: boolean;
   published_at: string | null;
   created_at?: string | null;
+  body?: string | null;
   assets: RepoReleaseAsset[];
   totalDownloads: number;
+}
+
+export interface RepoCommit {
+  sha: string;
+  html_url: string;
+  commit: {
+    message: string;
+    author?: { name?: string | null; date?: string | null } | null;
+  };
+  author?: { login: string; avatar_url: string } | null;
+}
+
+export interface RepoMilestone {
+  number: number;
+  title: string;
+  html_url: string;
+  description: string | null;
+  state: string;
+  open_issues: number;
+  closed_issues: number;
+  due_on: string | null;
+}
+
+export interface RepoCommunityProfile {
+  health_percentage: number;
+  files?: Partial<Record<
+    "readme" | "contributing" | "license" | "code_of_conduct" | "issue_template" | "pull_request_template",
+    { html_url?: string | null } | null
+  >>;
+}
+
+export interface RepoBranch {
+  name: string;
+  committedDate: string | null;
+  author: string | null;
+  aheadOfDefault: number | null;
+  behindDefault: number | null;
+  isDefault: boolean;
+}
+
+export interface RepoDiscussion {
+  title: string;
+  url: string;
+  createdAt: string;
+  updatedAt: string;
+  isAnswered: boolean;
+  author: string | null;
+  authorAvatar: string | null;
+  category: string | null;
+  comments: number;
 }
 
 export interface RepoWorkflowRun {
@@ -249,6 +300,10 @@ export interface RepoDetailsData {
   workflows: RepoWorkflowRun[];
   security: RepoSecuritySummary;
   digest?: DailyRepoDigest | null;
+  commits?: RepoCommit[];
+  milestones?: RepoMilestone[];
+  community?: RepoCommunityProfile | null;
+  counts?: { branches: number | null; discussions: number | null };
   errors?: Record<string, string | null>;
 }
 

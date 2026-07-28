@@ -5,11 +5,13 @@ import {
   fetchForks,
   fetchMentionCode,
   fetchMentionIssues,
+  fetchRepoBranches,
   fetchRepoDetails,
+  fetchRepoDiscussions,
   fetchRepoTraffic,
   removeRepoAlias,
 } from "../../api/github";
-import type { DependentItem, ForkNode, GhIssue, GhPullRequest, GhRepo, MentionCodeItem, MentionIssueItem, RepoDetailsData, RepoTrafficDetails } from "../../types/github";
+import type { DependentItem, ForkNode, GhIssue, GhPullRequest, GhRepo, MentionCodeItem, MentionIssueItem, RepoBranch, RepoDetailsData, RepoDiscussion, RepoTrafficDetails } from "../../types/github";
 import { issueCountForRepo } from "../../utils/dashboard";
 import { getLanguageColor } from "../../utils/colors";
 import { buildDailyRepoDigestMarkdown } from "../../utils/digests";
@@ -29,7 +31,7 @@ interface RepositoryDetailsModalProps {
   onIssuesClick: (repo: string) => void;
 }
 
-export type DetailTab = "overview" | "actions" | "pull-requests" | "issues" | "releases" | "forks" | "traffic" | "mentions" | "dependents";
+export type DetailTab = "overview" | "actions" | "commits" | "pull-requests" | "issues" | "milestones" | "releases" | "branches" | "forks" | "traffic" | "mentions" | "discussions" | "dependents";
 
 type ReleaseFilter = "all" | "stable" | "prerelease" | "draft";
 
@@ -44,6 +46,23 @@ function historyDelta(repo: GhRepo, field: "stars" | "forks") {
 function formatReleaseDate(iso: string | null | undefined) {
   if (!iso) return "Unpublished";
   return new Date(iso).toLocaleDateString();
+}
+
+function apiErrorMessage(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { message?: string };
+    if (parsed && typeof parsed.message === "string") return parsed.message;
+  } catch {
+    // raw text, fall through
+  }
+  return raw.length > 140 ? `${raw.slice(0, 140)}…` : raw;
+}
+
+function SourceErrorBanner({ label, error }: { label: string; error: string | null | undefined }) {
+  const message = apiErrorMessage(error);
+  if (!message) return null;
+  return <div className="modal-info-banner">{label} could not be loaded: {message}</div>;
 }
 
 function chartPath(values: number[], width: number, height: number) {
@@ -105,6 +124,19 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
   const [releasesPage, setReleasesPage] = useState(1);
   const [releaseFilter, setReleaseFilter] = useState<ReleaseFilter>("all");
   const [openReleaseIds, setOpenReleaseIds] = useState<number[]>([]);
+  const [commitsPage, setCommitsPage] = useState(1);
+  const [milestonesPage, setMilestonesPage] = useState(1);
+  const [branches, setBranches] = useState<RepoBranch[]>([]);
+  const [branchesTotal, setBranchesTotal] = useState(0);
+  const [branchesPage, setBranchesPage] = useState(1);
+  const [branchesLoading, setBranchesLoading] = useState(false);
+  const [branchesError, setBranchesError] = useState("");
+  const [discussions, setDiscussions] = useState<RepoDiscussion[]>([]);
+  const [discussionsTotal, setDiscussionsTotal] = useState(0);
+  const [discussionsEnabled, setDiscussionsEnabled] = useState(true);
+  const [discussionsPage, setDiscussionsPage] = useState(1);
+  const [discussionsLoading, setDiscussionsLoading] = useState(false);
+  const [discussionsError, setDiscussionsError] = useState("");
   const [forks, setForks] = useState<ForkNode[]>([]);
   const [forksTotal, setForksTotal] = useState(0);
   const [forksPage, setForksPage] = useState(1);
@@ -167,6 +199,15 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
     setReleaseFilter("all");
     setForksPage(1);
     setOpenReleaseIds([]);
+    setCommitsPage(1);
+    setMilestonesPage(1);
+    setBranches([]);
+    setBranchesTotal(0);
+    setBranchesPage(1);
+    setDiscussions([]);
+    setDiscussionsTotal(0);
+    setDiscussionsEnabled(true);
+    setDiscussionsPage(1);
   }, [repo.nameWithOwner]);
 
   useEffect(() => {
@@ -191,6 +232,53 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
       cancelled = true;
     };
   }, [activeTab, forkDirection, forkField, repo.nameWithOwner, refreshKey]);
+
+  useEffect(() => {
+    if (activeTab !== "branches") return;
+    let cancelled = false;
+    setBranchesLoading(true);
+    setBranchesError("");
+    void fetchRepoBranches(repo.nameWithOwner)
+      .then((result) => {
+        if (cancelled) return;
+        setBranches(result.branches);
+        setBranchesTotal(result.totalCount);
+        setBranchesPage(1);
+      })
+      .catch((err) => {
+        if (!cancelled) setBranchesError((err as Error).message);
+      })
+      .finally(() => {
+        if (!cancelled) setBranchesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, repo.nameWithOwner, refreshKey]);
+
+  useEffect(() => {
+    if (activeTab !== "discussions") return;
+    let cancelled = false;
+    setDiscussionsLoading(true);
+    setDiscussionsError("");
+    void fetchRepoDiscussions(repo.nameWithOwner)
+      .then((result) => {
+        if (cancelled) return;
+        setDiscussions(result.discussions);
+        setDiscussionsTotal(result.totalCount);
+        setDiscussionsEnabled(result.enabled);
+        setDiscussionsPage(1);
+      })
+      .catch((err) => {
+        if (!cancelled) setDiscussionsError((err as Error).message);
+      })
+      .finally(() => {
+        if (!cancelled) setDiscussionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, repo.nameWithOwner, refreshKey]);
 
   function toggleRelease(releaseId: number) {
     setOpenReleaseIds((current) =>
@@ -273,6 +361,11 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
     { key: "draft", label: "Drafts", count: draftReleases.length },
   ];
   const repoDigest = details?.digest ?? null;
+  const commits = details?.commits ?? [];
+  const milestones = details?.milestones ?? [];
+  const community = details?.community ?? null;
+  const detailCounts = details?.counts ?? null;
+  const detailErrors = details?.errors ?? {};
   const releasesPageSize = 10;
   const referrers = trafficDetails?.referrers ?? [];
   const popularPaths = trafficDetails?.paths ?? [];
@@ -289,6 +382,10 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
   const safeRepoPrsPage = clampPage(repoPrsPage, repoPullRequests.length, repoPrsPageSize);
   const safeReleasesPage = clampPage(releasesPage, filteredReleases.length, releasesPageSize);
   const safeForksPage = clampPage(forksPage, forks.length, forksPageSize);
+  const safeCommitsPage = clampPage(commitsPage, commits.length, MODAL_PAGE_SIZE);
+  const safeMilestonesPage = clampPage(milestonesPage, milestones.length, MODAL_PAGE_SIZE);
+  const safeBranchesPage = clampPage(branchesPage, branches.length, MODAL_PAGE_SIZE);
+  const safeDiscussionsPage = clampPage(discussionsPage, discussions.length, MODAL_PAGE_SIZE);
   const pagedContributors = contributors.slice((safeContributorsPage - 1) * MODAL_PAGE_SIZE, safeContributorsPage * MODAL_PAGE_SIZE);
   const pagedMentionItems = mentionItems.slice((safeMentionsPage - 1) * mentionsPageSize, safeMentionsPage * mentionsPageSize);
   const pagedWorkflows = workflows.slice((safeActionsPage - 1) * actionsPageSize, safeActionsPage * actionsPageSize);
@@ -297,6 +394,10 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
   const pagedRepoPrs = repoPullRequests.slice((safeRepoPrsPage - 1) * repoPrsPageSize, safeRepoPrsPage * repoPrsPageSize);
   const pagedReleases = filteredReleases.slice((safeReleasesPage - 1) * releasesPageSize, safeReleasesPage * releasesPageSize);
   const pagedForks = forks.slice((safeForksPage - 1) * forksPageSize, safeForksPage * forksPageSize);
+  const pagedCommits = commits.slice((safeCommitsPage - 1) * MODAL_PAGE_SIZE, safeCommitsPage * MODAL_PAGE_SIZE);
+  const pagedMilestones = milestones.slice((safeMilestonesPage - 1) * MODAL_PAGE_SIZE, safeMilestonesPage * MODAL_PAGE_SIZE);
+  const pagedBranches = branches.slice((safeBranchesPage - 1) * MODAL_PAGE_SIZE, safeBranchesPage * MODAL_PAGE_SIZE);
+  const pagedDiscussions = discussions.slice((safeDiscussionsPage - 1) * MODAL_PAGE_SIZE, safeDiscussionsPage * MODAL_PAGE_SIZE);
   const starHistory = (repo.history || []).map((entry) => entry.stars);
   const forkHistory = (repo.history || []).map((entry) => entry.forks);
   const viewHistory = (views?.views || []).map((entry) => entry.count);
@@ -304,12 +405,16 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
   const detailTabs = [
     { key: "overview" as const, label: "Overview", count: contributors.length + languages.length + (repoDigest ? 1 : 0) },
     { key: "actions" as const, label: "Actions", count: workflows.length },
+    { key: "commits" as const, label: "Commits", count: commits.length },
     { key: "pull-requests" as const, label: "PRs", count: repoPullRequests.length },
     { key: "issues" as const, label: "Issues", count: repoIssues.length },
+    { key: "milestones" as const, label: "Milestones", count: milestones.length },
     { key: "releases" as const, label: "Releases", count: releases.length },
+    { key: "branches" as const, label: "Branches", count: branchesTotal || detailCounts?.branches || 0 },
     { key: "forks" as const, label: "Forks", count: forksTotal || repo.forkCount },
     { key: "traffic" as const, label: "Traffic", count: referrers.length + popularPaths.length },
     { key: "mentions" as const, label: "Mentions", count: mentionItems.length + aliases.length },
+    { key: "discussions" as const, label: "Discussions", count: discussionsTotal || detailCounts?.discussions || 0 },
     { key: "dependents" as const, label: "Dependents", count: dependents.length },
   ];
 
@@ -502,6 +607,32 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
             ) : null}
           </section> : null}
 
+          {activeTab === "overview" && community ? (
+            <section>
+              <div className="modal-section-title section-title-with-count">
+                <span>Community health</span>
+                <strong>{community.health_percentage}%</strong>
+              </div>
+              <div className="community-files">
+                {([
+                  ["readme", "README"],
+                  ["license", "License"],
+                  ["contributing", "Contributing"],
+                  ["code_of_conduct", "Code of conduct"],
+                  ["issue_template", "Issue template"],
+                  ["pull_request_template", "PR template"],
+                ] as const).map(([key, label]) => {
+                  const present = Boolean(community.files?.[key]);
+                  return (
+                    <span className={`community-file ${present ? "present" : "missing"}`} key={key}>
+                      <i aria-hidden="true">{present ? "✓" : "–"}</i>{label}
+                    </span>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
           {activeTab === "overview" && languages.length ? (
             <section>
               <div className="modal-section-title">Languages</div>
@@ -598,6 +729,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
               <span>GitHub Actions history</span>
               <strong>{loading && !workflows.length ? "..." : formatNumber(workflows.length)}</strong>
             </div>
+            <SourceErrorBanner label="Workflow runs" error={detailErrors.workflows} />
             {pagedWorkflows.map((run) => {
               const state = run.conclusion || run.status;
               const startedAt = run.run_started_at || run.created_at || run.updated_at;
@@ -692,6 +824,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
               <span>Releases</span>
               <strong>{formatNumber(releases.length)}</strong>
             </div>
+            <SourceErrorBanner label="Releases" error={detailErrors.releases} />
             <div className="repo-detail-traffic-grid">
               <div className="repo-detail-traffic-card">
                 <span className="repo-detail-traffic-label">Release downloads</span>
@@ -742,28 +875,25 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                       <span>{formatNumber(release.totalDownloads)} downloads</span>
                     </button>
                     {openReleaseIds.includes(release.id) ? (
-                      release.assets.length ? (
-                        <div className="repo-detail-release-assets">
-                          <a className="repo-detail-release-link" href={release.html_url} target="_blank" rel="noreferrer">
-                            <span>Open release on GitHub</span>
-                            <em>{release.tag_name}</em>
-                          </a>
-                          {release.assets.map((asset) => (
+                      <div className="repo-detail-release-assets">
+                        <a className="repo-detail-release-link" href={release.html_url} target="_blank" rel="noreferrer">
+                          <span>Open release on GitHub</span>
+                          <em>{release.tag_name}</em>
+                        </a>
+                        {release.body?.trim() ? (
+                          <div className="repo-detail-release-notes">{release.body.trim()}</div>
+                        ) : null}
+                        {release.assets.length ? (
+                          release.assets.map((asset) => (
                             <a href={asset.browser_download_url || release.html_url} target="_blank" rel="noreferrer" key={asset.id}>
                               <span>{asset.name}</span>
                               <em>{formatNumber(asset.download_count)} downloads · {formatBytes(asset.size || 0)}</em>
                             </a>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="repo-detail-release-assets">
-                          <a className="repo-detail-release-link" href={release.html_url} target="_blank" rel="noreferrer">
-                            <span>Open release on GitHub</span>
-                            <em>{release.tag_name}</em>
-                          </a>
+                          ))
+                        ) : (
                           <div className="modal-empty sub">No assets attached to this release.</div>
-                        </div>
-                      )
+                        )}
+                      </div>
                     ) : null}
                   </div>
                 ))}
@@ -777,6 +907,157 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                 page={safeReleasesPage}
                 pageSize={releasesPageSize}
                 onPageChange={setReleasesPage}
+                onPageSizeChange={() => {}}
+                showPageSize={false}
+              />
+            ) : null}
+          </section> : null}
+
+          {activeTab === "commits" ? <section>
+            <div className="modal-section-title section-title-with-count">
+              <span>Recent commits</span>
+              <strong>{loading && !commits.length ? "..." : formatNumber(commits.length)}</strong>
+            </div>
+            <SourceErrorBanner label="Commits" error={detailErrors.commits} />
+            {pagedCommits.map((item) => (
+              <a className="commit-row" href={item.html_url} target="_blank" rel="noreferrer" key={item.sha}>
+                {item.author?.avatar_url
+                  ? <img src={item.author.avatar_url} alt="" />
+                  : <span className="repo-detail-avatar-fallback">{(item.author?.login || item.commit.author?.name || "?").slice(0, 1).toUpperCase()}</span>}
+                <span className="commit-main">
+                  <strong>{item.commit.message.split("\n")[0]}</strong>
+                  <em>
+                    {item.author?.login || item.commit.author?.name || "Unknown"}
+                    {item.commit.author?.date ? ` · ${formatRelativeTime(item.commit.author.date)}` : ""}
+                  </em>
+                </span>
+                <code>{item.sha.slice(0, 7)}</code>
+              </a>
+            ))}
+            {loading && !commits.length ? <div className="modal-empty sub">Loading commits...</div> : null}
+            {!loading && !commits.length ? <div className="modal-empty sub">No commits available.</div> : null}
+            {commits.length ? (
+              <Pagination
+                totalItems={commits.length}
+                page={safeCommitsPage}
+                pageSize={MODAL_PAGE_SIZE}
+                onPageChange={setCommitsPage}
+                onPageSizeChange={() => {}}
+                showPageSize={false}
+              />
+            ) : null}
+          </section> : null}
+
+          {activeTab === "milestones" ? <section>
+            <div className="modal-section-title section-title-with-count">
+              <span>Open milestones</span>
+              <strong>{loading && !milestones.length ? "..." : formatNumber(milestones.length)}</strong>
+            </div>
+            <SourceErrorBanner label="Milestones" error={detailErrors.milestones} />
+            {pagedMilestones.map((milestone) => {
+              const totalIssues = milestone.open_issues + milestone.closed_issues;
+              const progress = totalIssues ? Math.round((milestone.closed_issues / totalIssues) * 100) : 0;
+              return (
+                <a className="milestone-row" href={milestone.html_url} target="_blank" rel="noreferrer" key={milestone.number}>
+                  <div className="milestone-head">
+                    <strong>{milestone.title}</strong>
+                    <span>{progress}%</span>
+                  </div>
+                  {milestone.description ? <p>{milestone.description}</p> : null}
+                  <div className="ref-bar"><div className="ref-bar-fill" style={{ width: `${progress}%` }} /></div>
+                  <em>
+                    {formatNumber(milestone.closed_issues)} closed · {formatNumber(milestone.open_issues)} open
+                    {milestone.due_on ? ` · due ${new Date(milestone.due_on).toLocaleDateString()}` : ""}
+                  </em>
+                </a>
+              );
+            })}
+            {loading && !milestones.length ? <div className="modal-empty sub">Loading milestones...</div> : null}
+            {!loading && !milestones.length ? <div className="modal-empty sub">No open milestones.</div> : null}
+            {milestones.length ? (
+              <Pagination
+                totalItems={milestones.length}
+                page={safeMilestonesPage}
+                pageSize={MODAL_PAGE_SIZE}
+                onPageChange={setMilestonesPage}
+                onPageSizeChange={() => {}}
+                showPageSize={false}
+              />
+            ) : null}
+          </section> : null}
+
+          {activeTab === "branches" ? <section>
+            <div className="modal-section-title section-title-with-count">
+              <span>Branches</span>
+              <strong>{branchesLoading && !branches.length ? "..." : formatNumber(branchesTotal || branches.length)}</strong>
+            </div>
+            {branchesError ? <div className="modal-error">{branchesError}</div> : null}
+            {pagedBranches.map((branch) => (
+              <div className="branch-row" key={branch.name}>
+                <span className="branch-main">
+                  <span className="branch-name">
+                    <code>{branch.name}</code>
+                    {branch.isDefault ? <span className="rb">Default</span> : null}
+                  </span>
+                  <em>
+                    {branch.author || "Unknown"}
+                    {branch.committedDate ? ` · ${formatRelativeTime(branch.committedDate)}` : ""}
+                  </em>
+                </span>
+                {!branch.isDefault && branch.aheadOfDefault !== null && branch.behindDefault !== null ? (
+                  <span className="branch-compare" title="Commits ahead / behind the default branch">
+                    <em className="ahead">+{formatNumber(branch.aheadOfDefault)}</em>
+                    <em className="behind">-{formatNumber(branch.behindDefault)}</em>
+                  </span>
+                ) : null}
+              </div>
+            ))}
+            {branchesLoading && !branches.length ? <div className="modal-empty sub">Loading branches...</div> : null}
+            {!branchesLoading && !branches.length && !branchesError ? <div className="modal-empty sub">No branches available.</div> : null}
+            {branches.length ? (
+              <Pagination
+                totalItems={branches.length}
+                page={safeBranchesPage}
+                pageSize={MODAL_PAGE_SIZE}
+                onPageChange={setBranchesPage}
+                onPageSizeChange={() => {}}
+                showPageSize={false}
+              />
+            ) : null}
+          </section> : null}
+
+          {activeTab === "discussions" ? <section>
+            <div className="modal-section-title section-title-with-count">
+              <span>Discussions</span>
+              <strong>{discussionsLoading && !discussions.length ? "..." : formatNumber(discussionsTotal || discussions.length)}</strong>
+            </div>
+            {discussionsError ? <div className="modal-error">{discussionsError}</div> : null}
+            {!discussionsLoading && !discussionsError && !discussionsEnabled ? (
+              <div className="modal-info-banner">Discussions are not enabled for this repository.</div>
+            ) : null}
+            {pagedDiscussions.map((discussion) => (
+              <a className="discussion-row" href={discussion.url} target="_blank" rel="noreferrer" key={discussion.url}>
+                {discussion.authorAvatar ? <img src={discussion.authorAvatar} alt="" /> : <span className="repo-detail-avatar-fallback">{(discussion.author || "?").slice(0, 1).toUpperCase()}</span>}
+                <span className="discussion-main">
+                  <span className="discussion-title">
+                    <strong>{discussion.title}</strong>
+                    {discussion.isAnswered ? <span className="rb answered">Answered</span> : null}
+                  </span>
+                  <em>
+                    {discussion.category ? `${discussion.category} · ` : ""}
+                    {discussion.author || "Unknown"} · {formatNumber(discussion.comments)} comments · {formatRelativeTime(discussion.updatedAt)}
+                  </em>
+                </span>
+              </a>
+            ))}
+            {discussionsLoading && !discussions.length ? <div className="modal-empty sub">Loading discussions...</div> : null}
+            {!discussionsLoading && discussionsEnabled && !discussions.length && !discussionsError ? <div className="modal-empty sub">No discussions available.</div> : null}
+            {discussions.length ? (
+              <Pagination
+                totalItems={discussions.length}
+                page={safeDiscussionsPage}
+                pageSize={MODAL_PAGE_SIZE}
+                onPageChange={setDiscussionsPage}
                 onPageSizeChange={() => {}}
                 showPageSize={false}
               />

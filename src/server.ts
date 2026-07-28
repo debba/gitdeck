@@ -82,6 +82,54 @@ query($owner:String!, $name:String!, $cursor:String, $field:RepositoryOrderField
   }
 }`;
 
+const REPO_COUNTS_QUERY = `
+query($owner:String!, $name:String!) {
+  repository(owner:$owner, name:$name) {
+    refs(refPrefix:"refs/heads/", first:1) { totalCount }
+    discussions(first:1) { totalCount }
+  }
+}`;
+
+const BRANCHES_QUERY = `
+query($owner:String!, $name:String!, $defaultRef:String!) {
+  repository(owner:$owner, name:$name) {
+    defaultBranchRef { name }
+    refs(refPrefix:"refs/heads/", first:100, orderBy:{field:ALPHABETICAL, direction:ASC}) {
+      totalCount
+      nodes {
+        name
+        target {
+          ... on Commit {
+            committedDate
+            author { name user { login } }
+          }
+        }
+        compare(headRef:$defaultRef) { aheadBy behindBy }
+      }
+    }
+  }
+}`;
+
+const DISCUSSIONS_QUERY = `
+query($owner:String!, $name:String!) {
+  repository(owner:$owner, name:$name) {
+    hasDiscussionsEnabled
+    discussions(first:50, orderBy:{field:UPDATED_AT, direction:DESC}) {
+      totalCount
+      nodes {
+        title
+        url
+        createdAt
+        updatedAt
+        isAnswered
+        author { login avatarUrl }
+        category { name }
+        comments(first:1) { totalCount }
+      }
+    }
+  }
+}`;
+
 const ALLOWED_DIRECTIONS = new Set(["DESC", "ASC"]);
 const ALLOWED_FORK_FIELDS = new Set([
   "PUSHED_AT", "UPDATED_AT", "CREATED_AT", "STARGAZERS", "NAME",
@@ -142,6 +190,91 @@ async function handleForks(res: ServerResponse, u: URL): Promise<void> {
       };
     }>(FORKS_QUERY, { owner: rp[0], name: rp[1], cursor, direction, field });
     sendJson(res, 200, { ok: true, ...data.repository.forks });
+  } catch (e) {
+    sendJson(res, 500, { ok: false, error: (e as Error).message });
+  }
+}
+
+async function handleRepoBranches(res: ServerResponse, u: URL): Promise<void> {
+  const rp = parseRepo(u.searchParams.get("repo"));
+  if (!rp) return sendJson(res, 400, { ok: false, error: "invalid repo" });
+  try {
+    const head = await gql<{ repository: { defaultBranchRef: { name: string } | null } }>(
+      `query($owner:String!, $name:String!) { repository(owner:$owner, name:$name) { defaultBranchRef { name } } }`,
+      { owner: rp[0], name: rp[1] },
+    );
+    const defaultRef = head.repository.defaultBranchRef?.name;
+    if (!defaultRef) return sendJson(res, 200, { ok: true, totalCount: 0, defaultBranch: null, branches: [] });
+    const data = await gql<{
+      repository: {
+        refs: {
+          totalCount: number;
+          nodes: {
+            name: string;
+            target: { committedDate?: string; author?: { name: string | null; user: { login: string } | null } } | null;
+            compare: { aheadBy: number; behindBy: number } | null;
+          }[];
+        };
+      };
+    }>(BRANCHES_QUERY, { owner: rp[0], name: rp[1], defaultRef });
+    const branches = data.repository.refs.nodes.map((node) => ({
+      name: node.name,
+      committedDate: node.target?.committedDate ?? null,
+      author: node.target?.author?.user?.login || node.target?.author?.name || null,
+      // compare uses the branch as base and the default branch as head, so the
+      // perspective is inverted relative to "branch vs default".
+      aheadOfDefault: node.compare?.behindBy ?? null,
+      behindDefault: node.compare?.aheadBy ?? null,
+      isDefault: node.name === defaultRef,
+    }));
+    branches.sort((a, b) => {
+      if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+      return (b.committedDate || "").localeCompare(a.committedDate || "");
+    });
+    sendJson(res, 200, { ok: true, totalCount: data.repository.refs.totalCount, defaultBranch: defaultRef, branches });
+  } catch (e) {
+    sendJson(res, 500, { ok: false, error: (e as Error).message });
+  }
+}
+
+async function handleRepoDiscussions(res: ServerResponse, u: URL): Promise<void> {
+  const rp = parseRepo(u.searchParams.get("repo"));
+  if (!rp) return sendJson(res, 400, { ok: false, error: "invalid repo" });
+  try {
+    const data = await gql<{
+      repository: {
+        hasDiscussionsEnabled: boolean;
+        discussions: {
+          totalCount: number;
+          nodes: {
+            title: string;
+            url: string;
+            createdAt: string;
+            updatedAt: string;
+            isAnswered: boolean | null;
+            author: { login: string; avatarUrl: string } | null;
+            category: { name: string } | null;
+            comments: { totalCount: number };
+          }[];
+        };
+      };
+    }>(DISCUSSIONS_QUERY, { owner: rp[0], name: rp[1] });
+    sendJson(res, 200, {
+      ok: true,
+      enabled: data.repository.hasDiscussionsEnabled,
+      totalCount: data.repository.discussions.totalCount,
+      discussions: data.repository.discussions.nodes.map((node) => ({
+        title: node.title,
+        url: node.url,
+        createdAt: node.createdAt,
+        updatedAt: node.updatedAt,
+        isAnswered: node.isAnswered ?? false,
+        author: node.author?.login ?? null,
+        authorAvatar: node.author?.avatarUrl ?? null,
+        category: node.category?.name ?? null,
+        comments: node.comments.totalCount,
+      })),
+    });
   } catch (e) {
     sendJson(res, 500, { ok: false, error: (e as Error).message });
   }
@@ -723,7 +856,26 @@ async function handleRepoDetails(res: ServerResponse, u: URL): Promise<void> {
     return restApiPaginate(`/repos/${repo}/releases?per_page=100`);
   }
 
-  const [meta, languages, contributors, commits, workflows, views, releases, repoDigest, security] = await Promise.all([
+  async function fetchRepoCounts(): Promise<{ branches: number | null; discussions: number | null }> {
+    const rp = parseRepo(repo);
+    if (!rp) return { branches: null, discussions: null };
+    try {
+      const data = await gql<{
+        repository: {
+          refs: { totalCount: number } | null;
+          discussions: { totalCount: number };
+        };
+      }>(REPO_COUNTS_QUERY, { owner: rp[0], name: rp[1] });
+      return {
+        branches: data.repository.refs?.totalCount ?? null,
+        discussions: data.repository.discussions.totalCount,
+      };
+    } catch {
+      return { branches: null, discussions: null };
+    }
+  }
+
+  const [meta, languages, contributors, commits, workflows, views, releases, repoDigest, security, milestones, community, counts] = await Promise.all([
     ghApiJson(`/repos/${repo}`),
     ghApiJson(`/repos/${repo}/languages`),
     fetchContributors(),
@@ -733,6 +885,9 @@ async function handleRepoDetails(res: ServerResponse, u: URL): Promise<void> {
     fetchReleases(),
     getLatestRepoDigest(repo),
     fetchRepoSecuritySummary(repo),
+    ghApiJson(`/repos/${repo}/milestones?state=open&per_page=100&sort=due_on&direction=asc`),
+    ghApiJson(`/repos/${repo}/community/profile`),
+    fetchRepoCounts(),
   ]);
 
   const normalizedReleases = releases.ok
@@ -745,6 +900,7 @@ async function handleRepoDetails(res: ServerResponse, u: URL): Promise<void> {
         prerelease: boolean;
         published_at: string | null;
         created_at?: string | null;
+        body?: string | null;
         assets?: Array<{
           id: number;
           name: string;
@@ -772,6 +928,9 @@ async function handleRepoDetails(res: ServerResponse, u: URL): Promise<void> {
     security,
     digest: repoDigest,
     commits: commits.ok ? commits.data : [],
+    milestones: milestones.ok ? milestones.data : [],
+    community: community.ok ? community.data : null,
+    counts,
     workflows: workflows.ok
       ? ((workflows.data as { workflow_runs?: unknown[] } | null)?.workflow_runs ?? [])
       : [],
@@ -783,6 +942,8 @@ async function handleRepoDetails(res: ServerResponse, u: URL): Promise<void> {
       releases: releases.ok ? null : releases.error,
       commits: commits.ok ? null : commits.error,
       workflows: workflows.ok ? null : workflows.error,
+      milestones: milestones.ok ? null : milestones.error,
+      community: community.ok ? null : community.error,
     },
   });
 }
@@ -1122,6 +1283,12 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   }
   if (url.startsWith("/api/repo-details")) {
     return handleRepoDetails(res, new URL(url, "http://localhost"));
+  }
+  if (url.startsWith("/api/repo-branches")) {
+    return handleRepoBranches(res, new URL(url, "http://localhost"));
+  }
+  if (url.startsWith("/api/repo-discussions")) {
+    return handleRepoDiscussions(res, new URL(url, "http://localhost"));
   }
   if (url.startsWith("/api/repo-insights")) {
     return handleRepoInsights(req, res, new URL(url, "http://localhost"));
