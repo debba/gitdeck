@@ -567,16 +567,24 @@ export function App() {
   }, [repoFilters, issueFilters, prFilters, issueSort, prSort, repoSort]);
 
   const userLogin = userLoginValue;
-  const issueFacets = useMemo(() => buildIssueFacets(issues), [issues]);
-  const prFacets = useMemo(() => buildPullRequestFacets(pullRequests), [pullRequests]);
-  const repoFacets = useMemo(() => buildRepoFacets(repos), [repos]);
-  const insightsByRepo = useMemo(() => new Map(repoInsights.map((insight) => [insight.repo, insight])), [repoInsights]);
   const archivedRepoNames = useMemo(
     () => (hideArchivedNoise ? new Set(repos.filter((repo) => repo.isArchived).map((repo) => repo.nameWithOwner)) : new Set<string>()),
     [repos, hideArchivedNoise],
   );
-  const filteredIssues = useMemo(() => sortIssues(filterIssues(issues, issueFilters, userLogin, archivedRepoNames), issueSort), [issues, issueFilters, issueSort, userLogin, archivedRepoNames]);
-  const filteredPullRequests = useMemo(() => sortPullRequests(filterPullRequests(pullRequests, prFilters, userLogin, archivedRepoNames), prSort), [pullRequests, prFilters, prSort, userLogin, archivedRepoNames]);
+  const nonArchivedIssues = useMemo(
+    () => (archivedRepoNames.size ? issues.filter((issue) => !archivedRepoNames.has(issue.repository.nameWithOwner)) : issues),
+    [issues, archivedRepoNames],
+  );
+  const nonArchivedPullRequests = useMemo(
+    () => (archivedRepoNames.size ? pullRequests.filter((pr) => !archivedRepoNames.has(pr.repository.nameWithOwner)) : pullRequests),
+    [pullRequests, archivedRepoNames],
+  );
+  const issueFacets = useMemo(() => buildIssueFacets(nonArchivedIssues), [nonArchivedIssues]);
+  const prFacets = useMemo(() => buildPullRequestFacets(nonArchivedPullRequests), [nonArchivedPullRequests]);
+  const repoFacets = useMemo(() => buildRepoFacets(repos), [repos]);
+  const insightsByRepo = useMemo(() => new Map(repoInsights.map((insight) => [insight.repo, insight])), [repoInsights]);
+  const filteredIssues = useMemo(() => sortIssues(filterIssues(nonArchivedIssues, issueFilters, userLogin), issueSort), [nonArchivedIssues, issueFilters, issueSort, userLogin]);
+  const filteredPullRequests = useMemo(() => sortPullRequests(filterPullRequests(nonArchivedPullRequests, prFilters, userLogin), prSort), [nonArchivedPullRequests, prFilters, prSort, userLogin]);
   const filteredRepos = useMemo(() => sortRepos(filterRepos(repos, issues, repoFilters), issues, repoSort, insightsByRepo), [repos, issues, repoFilters, repoSort, insightsByRepo]);
   const filteredInsights = useMemo(
     () => filteredRepos
