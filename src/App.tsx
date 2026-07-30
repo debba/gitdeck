@@ -67,6 +67,7 @@ import {
   type RepoFilters,
 } from "./utils/dashboard";
 import { clampPage } from "./utils/pagination";
+import { getOwner } from "./utils/repository";
 import { formatNumber } from "./utils/format";
 import { clearStatsCache, readStatsCache, writeStatsCache } from "./utils/statsCache";
 import { clearFiltersCache, hydrateFilters, readFiltersCache, writeFiltersCache } from "./utils/filtersCache";
@@ -579,8 +580,22 @@ export function App() {
     () => (archivedRepoNames.size ? pullRequests.filter((pr) => !archivedRepoNames.has(pr.repository.nameWithOwner)) : pullRequests),
     [pullRequests, archivedRepoNames],
   );
-  const issueFacets = useMemo(() => buildIssueFacets(nonArchivedIssues), [nonArchivedIssues]);
-  const prFacets = useMemo(() => buildPullRequestFacets(nonArchivedPullRequests), [nonArchivedPullRequests]);
+  const issuesForFacets = useMemo(
+    () => (issueFilters.orgs.size ? nonArchivedIssues.filter((issue) => issueFilters.orgs.has(getOwner(issue.repository.nameWithOwner))) : nonArchivedIssues),
+    [nonArchivedIssues, issueFilters.orgs],
+  );
+  const pullRequestsForFacets = useMemo(
+    () => (prFilters.orgs.size ? nonArchivedPullRequests.filter((pr) => prFilters.orgs.has(getOwner(pr.repository.nameWithOwner))) : nonArchivedPullRequests),
+    [nonArchivedPullRequests, prFilters.orgs],
+  );
+  const issueFacets = useMemo(
+    () => ({ ...buildIssueFacets(issuesForFacets), orgs: buildIssueFacets(nonArchivedIssues).orgs }),
+    [issuesForFacets, nonArchivedIssues],
+  );
+  const prFacets = useMemo(
+    () => ({ ...buildPullRequestFacets(pullRequestsForFacets), orgs: buildPullRequestFacets(nonArchivedPullRequests).orgs }),
+    [pullRequestsForFacets, nonArchivedPullRequests],
+  );
   const repoFacets = useMemo(() => buildRepoFacets(repos), [repos]);
   const insightsByRepo = useMemo(() => new Map(repoInsights.map((insight) => [insight.repo, insight])), [repoInsights]);
   const filteredIssues = useMemo(() => sortIssues(filterIssues(nonArchivedIssues, issueFilters, userLogin), issueSort), [nonArchivedIssues, issueFilters, issueSort, userLogin]);
