@@ -83,7 +83,8 @@ export async function getRepoInsightsCached(forceFresh: boolean) {
     if (!repos.ok) return repos;
     if (!issues.ok) return issues;
 
-    const insights = await mapWithConcurrency(repos.repos, 6, async (repo) => fetchInsightForRepo(repo, issues.issues));
+    const activeRepos = repos.repos.filter((repo) => !repo.isArchived);
+    const insights = await mapWithConcurrency(activeRepos, 6, async (repo) => fetchInsightForRepo(repo, issues.issues));
     const result = {
       ok: true as const,
       generatedAt: new Date().toISOString(),

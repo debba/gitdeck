@@ -57,6 +57,7 @@ export const it: Record<keyof typeof en, string> = {
   "preferences.language": "Lingua",
   "preferences.theme": "Tema",
   "preferences.textSize": "Dimensione testo",
+  "preferences.hideArchivedNoise": "Nascondi rumore repo archiviati (PR/issue)",
   "textSize.small": "Piccolo",
   "textSize.normal": "Normale",
   "textSize.large": "Grande",

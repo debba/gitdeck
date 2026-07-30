@@ -131,7 +131,7 @@ export function matchesIssuePreset(issue: GhIssue, preset: string, userLogin: st
   return true;
 }
 
-export function filterIssues(issues: GhIssue[], filters: IssueFilters, userLogin: string): GhIssue[] {
+export function filterIssues(issues: GhIssue[], filters: IssueFilters, userLogin: string, archivedRepoNames: Set<string> = new Set()): GhIssue[] {
   const query = filters.search.trim().toLowerCase();
   const createdFrom = filters.dates.cf ? new Date(`${filters.dates.cf}T00:00:00`).getTime() : null;
   const createdTo = filters.dates.ct ? new Date(`${filters.dates.ct}T23:59:59`).getTime() : null;
@@ -139,6 +139,7 @@ export function filterIssues(issues: GhIssue[], filters: IssueFilters, userLogin
   const updatedTo = filters.dates.ut ? new Date(`${filters.dates.ut}T23:59:59`).getTime() : null;
 
   return issues.filter((issue) => {
+    if (archivedRepoNames.has(issue.repository.nameWithOwner)) return false;
     const owner = getOwner(issue.repository.nameWithOwner);
     if (filters.orgs.size && !filters.orgs.has(owner)) return false;
     if (filters.repos.size && !filters.repos.has(issue.repository.nameWithOwner)) return false;
@@ -199,7 +200,7 @@ export function matchesPullRequestPreset(pr: GhPullRequest, preset: string, user
   return true;
 }
 
-export function filterPullRequests(prs: GhPullRequest[], filters: PullRequestFilters, userLogin: string): GhPullRequest[] {
+export function filterPullRequests(prs: GhPullRequest[], filters: PullRequestFilters, userLogin: string, archivedRepoNames: Set<string> = new Set()): GhPullRequest[] {
   const query = filters.search.trim().toLowerCase();
   const createdFrom = filters.dates.cf ? new Date(`${filters.dates.cf}T00:00:00`).getTime() : null;
   const createdTo = filters.dates.ct ? new Date(`${filters.dates.ct}T23:59:59`).getTime() : null;
@@ -207,6 +208,7 @@ export function filterPullRequests(prs: GhPullRequest[], filters: PullRequestFil
   const updatedTo = filters.dates.ut ? new Date(`${filters.dates.ut}T23:59:59`).getTime() : null;
 
   return prs.filter((pr) => {
+    if (archivedRepoNames.has(pr.repository.nameWithOwner)) return false;
     const owner = getOwner(pr.repository.nameWithOwner);
     if (filters.orgs.size && !filters.orgs.has(owner)) return false;
     if (filters.repos.size && !filters.repos.has(pr.repository.nameWithOwner)) return false;

@@ -57,6 +57,7 @@ export const zh: Record<keyof typeof en, string> = {
   "preferences.language": "语言",
   "preferences.theme": "主题",
   "preferences.textSize": "文字大小",
+  "preferences.hideArchivedNoise": "隐藏已归档仓库的噪音（PR/issue）",
   "textSize.small": "小",
   "textSize.normal": "正常",
   "textSize.large": "大",

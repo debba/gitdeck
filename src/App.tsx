@@ -207,6 +207,7 @@ export function App() {
   const [inboxSearch, setInboxSearch] = useState("");
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem("gh-dash.theme") as Theme) || "dark");
   const [textSize, setTextSize] = useState<TextSize>(() => (localStorage.getItem("gh-dash.textSize") as TextSize) || "normal");
+  const [hideArchivedNoise, setHideArchivedNoise] = useState(() => localStorage.getItem("gh-dash.hideArchivedNoise") !== "0");
   const [issueFilters, setIssueFilters] = useState<IssueFilters>(() => cachedFiltersOnMount?.hydrated.issueFilters ?? defaultIssueFilters());
   const [prFilters, setPrFilters] = useState<PullRequestFilters>(() => cachedFiltersOnMount?.hydrated.prFilters ?? defaultPrFilters());
   const [repoFilters, setRepoFilters] = useState<RepoFilters>(() => cachedFiltersOnMount?.hydrated.repoFilters ?? defaultRepoFilters());
@@ -446,6 +447,10 @@ export function App() {
   }, [textSize]);
 
   useEffect(() => {
+    localStorage.setItem("gh-dash.hideArchivedNoise", hideArchivedNoise ? "1" : "0");
+  }, [hideArchivedNoise]);
+
+  useEffect(() => {
     document.body.classList.toggle("tab-inbox", tab === "inbox");
     document.body.classList.toggle("tab-issues", tab === "issues");
     document.body.classList.toggle("tab-prs", tab === "prs");
@@ -566,8 +571,12 @@ export function App() {
   const prFacets = useMemo(() => buildPullRequestFacets(pullRequests), [pullRequests]);
   const repoFacets = useMemo(() => buildRepoFacets(repos), [repos]);
   const insightsByRepo = useMemo(() => new Map(repoInsights.map((insight) => [insight.repo, insight])), [repoInsights]);
-  const filteredIssues = useMemo(() => sortIssues(filterIssues(issues, issueFilters, userLogin), issueSort), [issues, issueFilters, issueSort, userLogin]);
-  const filteredPullRequests = useMemo(() => sortPullRequests(filterPullRequests(pullRequests, prFilters, userLogin), prSort), [pullRequests, prFilters, prSort, userLogin]);
+  const archivedRepoNames = useMemo(
+    () => (hideArchivedNoise ? new Set(repos.filter((repo) => repo.isArchived).map((repo) => repo.nameWithOwner)) : new Set<string>()),
+    [repos, hideArchivedNoise],
+  );
+  const filteredIssues = useMemo(() => sortIssues(filterIssues(issues, issueFilters, userLogin, archivedRepoNames), issueSort), [issues, issueFilters, issueSort, userLogin, archivedRepoNames]);
+  const filteredPullRequests = useMemo(() => sortPullRequests(filterPullRequests(pullRequests, prFilters, userLogin, archivedRepoNames), prSort), [pullRequests, prFilters, prSort, userLogin, archivedRepoNames]);
   const filteredRepos = useMemo(() => sortRepos(filterRepos(repos, issues, repoFilters), issues, repoSort, insightsByRepo), [repos, issues, repoFilters, repoSort, insightsByRepo]);
   const filteredInsights = useMemo(
     () => filteredRepos
@@ -714,8 +723,10 @@ export function App() {
         loading={loading}
         theme={theme}
         textSize={textSize}
+        hideArchivedNoise={hideArchivedNoise}
         onThemeChange={setTheme}
         onTextSizeChange={setTextSize}
+        onHideArchivedNoiseChange={setHideArchivedNoise}
         authLogin={authLogin}
         owners={owners}
         onRefresh={() => loadData(true)}

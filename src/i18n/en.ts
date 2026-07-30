@@ -55,6 +55,7 @@ export const en = {
   "preferences.language": "Language",
   "preferences.theme": "Theme",
   "preferences.textSize": "Text size",
+  "preferences.hideArchivedNoise": "Hide archived repo noise (PRs/issues)",
   "textSize.small": "Small",
   "textSize.normal": "Normal",
   "textSize.large": "Large",
