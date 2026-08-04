@@ -13,10 +13,12 @@ interface TopBarProps {
   loading: boolean;
   theme: Theme;
   textSize: TextSize;
+  hideArchivedNoise: boolean;
   authLogin: string | null;
   owners: string[];
   onThemeChange: (theme: Theme) => void;
   onTextSizeChange: (textSize: TextSize) => void;
+  onHideArchivedNoiseChange: (hideArchivedNoise: boolean) => void;
   onRefresh: () => void;
   onOpenFilters: () => void;
   onOpenPalette: () => void;
@@ -30,10 +32,12 @@ export function TopBar({
   loading,
   theme,
   textSize,
+  hideArchivedNoise,
   authLogin,
   owners,
   onThemeChange,
   onTextSizeChange,
+  onHideArchivedNoiseChange,
   onRefresh,
   onOpenFilters,
   onOpenPalette,
@@ -135,6 +139,18 @@ export function TopBar({
                       {entry === "small" ? t("textSize.small") : entry === "normal" ? t("textSize.normal") : t("textSize.large")}
                     </button>
                   ))}
+                </div>
+              </div>
+              <div className="preferences-field">
+                <div className="toggle-row">
+                  <span>{t("preferences.hideArchivedNoise")}</span>
+                  <button
+                    className={`toggle ${hideArchivedNoise ? "on" : ""}`}
+                    role="switch"
+                    aria-checked={hideArchivedNoise}
+                    type="button"
+                    onClick={() => onHideArchivedNoiseChange(!hideArchivedNoise)}
+                  />
                 </div>
               </div>
             </div>

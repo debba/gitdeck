@@ -34,9 +34,10 @@ async function saveDigests(): Promise<void> {
 }
 
 export async function recordDailyDigest(repos: GhRepo[], issues: GhIssue[]): Promise<void> {
+  const activeRepos = repos.filter((repo) => !repo.isArchived);
   const digests = await loadDigests();
   const securityEntries = await Promise.all(
-    repos.map(async (repo) => {
+    activeRepos.map(async (repo) => {
       try {
         const summary = await fetchRepoSecuritySummary(repo.nameWithOwner);
         return [repo.nameWithOwner, summary] as const;
@@ -45,7 +46,7 @@ export async function recordDailyDigest(repos: GhRepo[], issues: GhIssue[]): Pro
       }
     }),
   );
-  const today = buildDailyDigestRecord(repos, issues, Date.now(), new Map(securityEntries.map(([repo, summary]) => [repo, summary])));
+  const today = buildDailyDigestRecord(activeRepos, issues, Date.now(), new Map(securityEntries.map(([repo, summary]) => [repo, summary])));
   const existing = digests.find((entry) => entry.date === today.date);
   if (existing) {
     Object.assign(existing, today);
