@@ -156,6 +156,7 @@
 
   /* Radio-like option groups */
   .opt-group { display: flex; gap: 4px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
+  .opt-group.author-mode { margin-bottom: 6px; }
   .opt-group button {
     flex: 1; background: transparent; border: none; color: var(--muted); cursor: pointer;
     padding: 6px 8px; border-radius: 5px; font-size: 12px; font-weight: 600;

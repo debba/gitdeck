@@ -14,6 +14,7 @@ export interface IssueFilters {
   repos: Set<string>;
   labels: Set<string>;
   authors: Set<string>;
+  authorMode: "include" | "exclude";
   assignees: Set<string>;
   dates: DateFilters;
   preset: string;
@@ -25,6 +26,7 @@ export interface PullRequestFilters {
   repos: Set<string>;
   labels: Set<string>;
   authors: Set<string>;
+  authorMode: "include" | "exclude";
   assignees: Set<string>;
   dates: DateFilters;
   preset: string;
@@ -144,7 +146,10 @@ export function filterIssues(issues: GhIssue[], filters: IssueFilters, userLogin
     if (filters.orgs.size && !filters.orgs.has(owner)) return false;
     if (filters.repos.size && !filters.repos.has(issue.repository.nameWithOwner)) return false;
     if (filters.labels.size && ![...(issue.labels || []).map((label) => label.name)].some((label) => filters.labels.has(label))) return false;
-    if (filters.authors.size && !filters.authors.has(issue.author?.login || "")) return false;
+    if (filters.authors.size) {
+      const authorSelected = filters.authors.has(issue.author?.login || "");
+      if (filters.authorMode === "exclude" ? authorSelected : !authorSelected) return false;
+    }
     if (filters.assignees.size && ![...(issue.assignees || []).map((assignee) => assignee.login)].some((login) => filters.assignees.has(login))) return false;
 
     const created = new Date(issue.createdAt).getTime();
@@ -213,7 +218,10 @@ export function filterPullRequests(prs: GhPullRequest[], filters: PullRequestFil
     if (filters.orgs.size && !filters.orgs.has(owner)) return false;
     if (filters.repos.size && !filters.repos.has(pr.repository.nameWithOwner)) return false;
     if (filters.labels.size && ![...(pr.labels || []).map((label) => label.name)].some((label) => filters.labels.has(label))) return false;
-    if (filters.authors.size && !filters.authors.has(pr.author?.login || "")) return false;
+    if (filters.authors.size) {
+      const authorSelected = filters.authors.has(pr.author?.login || "");
+      if (filters.authorMode === "exclude" ? authorSelected : !authorSelected) return false;
+    }
     if (filters.assignees.size && ![...(pr.assignees || []).map((assignee) => assignee.login)].some((login) => filters.assignees.has(login))) return false;
 
     const created = new Date(pr.createdAt).getTime();

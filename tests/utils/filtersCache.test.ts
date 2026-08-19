@@ -11,11 +11,11 @@ function makeDefaultRepoFilters() {
 }
 
 function makeDefaultIssueFilters() {
-  return { search: "", orgs: new Set<string>(), repos: new Set<string>(), labels: new Set<string>(), authors: new Set<string>(), assignees: new Set<string>(), dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" };
+  return { search: "", orgs: new Set<string>(), repos: new Set<string>(), labels: new Set<string>(), authors: new Set<string>(), authorMode: "include" as const, assignees: new Set<string>(), dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" };
 }
 
 function makeDefaultPrFilters() {
-  return { search: "", orgs: new Set<string>(), repos: new Set<string>(), labels: new Set<string>(), authors: new Set<string>(), assignees: new Set<string>(), dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" };
+  return { search: "", orgs: new Set<string>(), repos: new Set<string>(), labels: new Set<string>(), authors: new Set<string>(), authorMode: "include" as const, assignees: new Set<string>(), dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" };
 }
 
 describe("filtersCache", () => {
@@ -33,8 +33,8 @@ describe("filtersCache", () => {
 
   it("round-trips write then read", () => {
     const repo = { ...makeDefaultRepoFilters(), orgs: new Set(["acme"]), languages: new Set(["Go"]), visibility: "private" as const };
-    const issue = { ...makeDefaultIssueFilters(), search: "bug", orgs: new Set(["acme"]) };
-    const pr = { ...makeDefaultPrFilters(), preset: "draft" };
+    const issue = { ...makeDefaultIssueFilters(), search: "bug", orgs: new Set(["acme"]), authors: new Set(["renovate"]), authorMode: "exclude" as const };
+    const pr = { ...makeDefaultPrFilters(), preset: "draft", authors: new Set(["alice"]), authorMode: "exclude" as const };
 
     writeFiltersCache(repo, issue, pr);
     const result = readFiltersCache();
@@ -45,7 +45,9 @@ describe("filtersCache", () => {
     expect(result!.repoFilters.visibility).toBe("private");
     expect(result!.issueFilters.search).toBe("bug");
     expect(result!.issueFilters.orgs).toEqual(["acme"]);
+    expect(result!.issueFilters.authorMode).toBe("exclude");
     expect(result!.prFilters.preset).toBe("draft");
+    expect(result!.prFilters.authorMode).toBe("exclude");
     expect(result!.savedAt).toBeGreaterThan(0);
   });
 
@@ -60,6 +62,18 @@ describe("filtersCache", () => {
     expect(hydrated.repoFilters.orgs.has("org1")).toBe(true);
     expect(hydrated.repoFilters.orgs.has("org2")).toBe(true);
     expect(hydrated.repoFilters.languages.has("TypeScript")).toBe(true);
+  });
+
+  it("hydrates legacy caches with inclusive author filters", () => {
+    writeFiltersCache(makeDefaultRepoFilters(), makeDefaultIssueFilters(), makeDefaultPrFilters());
+    const raw = JSON.parse(localStorage.getItem("gh-dash.cache.filters")!);
+    delete raw.issueFilters.authorMode;
+    delete raw.prFilters.authorMode;
+    localStorage.setItem("gh-dash.cache.filters", JSON.stringify(raw));
+
+    const hydrated = hydrateFilters(readFiltersCache()!);
+    expect(hydrated.issueFilters.authorMode).toBe("include");
+    expect(hydrated.prFilters.authorMode).toBe("include");
   });
 
   it("returns null for corrupted JSON", () => {
