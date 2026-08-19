@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { GhIssue, GhRepo, RepoInsight } from "../../types/github";
 import { getLanguageColor } from "../../utils/colors";
 import { formatNumber, formatRelativeTime } from "../../utils/format";
@@ -14,24 +15,52 @@ interface RepoGridProps {
   onIssuesClick: (repo: string) => void;
   onStarsClick: (repo: string) => void;
   onForksClick: (repo: string) => void;
+  onVisibleReposChange?: (repos: string[]) => void;
 }
 
-export function RepoGrid({ repos, issues, insightsByRepo, onRepoClick, onIssuesClick, onStarsClick, onForksClick }: RepoGridProps) {
+export function RepoGrid({ repos, issues, insightsByRepo, onRepoClick, onIssuesClick, onStarsClick, onForksClick, onVisibleReposChange }: RepoGridProps) {
   const { language, t } = useI18n();
+  const gridRef = useRef<HTMLDivElement>(null);
+  const repoKey = repos.map((repo) => repo.nameWithOwner).join("\n");
+
+  useEffect(() => {
+    if (!onVisibleReposChange || !gridRef.current) return;
+    if (typeof IntersectionObserver === "undefined") {
+      onVisibleReposChange(repos.map((repo) => repo.nameWithOwner));
+      return () => onVisibleReposChange([]);
+    }
+    const visible = new Set<string>();
+    const publish = () => onVisibleReposChange(repos.map((repo) => repo.nameWithOwner).filter((repo) => visible.has(repo)));
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const repo = (entry.target as HTMLElement).dataset.repo;
+        if (!repo) continue;
+        if (entry.isIntersecting) visible.add(repo);
+      }
+      publish();
+    }, { rootMargin: "240px 0px", threshold: 0.01 });
+    for (const card of gridRef.current.querySelectorAll<HTMLElement>("[data-repo]")) observer.observe(card);
+    return () => {
+      observer.disconnect();
+      onVisibleReposChange([]);
+    };
+  }, [repoKey, onVisibleReposChange]);
+
   if (!repos.length) {
     return <div className="empty"><div className="big">{t("empty.reposTitle")}</div><div>{t("empty.tryClearing")}</div></div>;
   }
 
   return (
-    <div className="repos-grid">
+    <div className="repos-grid" ref={gridRef}>
       {repos.map((repo) => {
-        const issueCount = issueCountForRepo(issues, repo.nameWithOwner);
+        const issueCount = issueCountForRepo(issues, repo.nameWithOwner, repo.openIssueCount);
         const primaryLanguage = repo.primaryLanguage?.name;
         const insight = insightsByRepo.get(repo.nameWithOwner);
         return (
           <article
             className="repo-card"
             key={repo.nameWithOwner}
+            data-repo={repo.nameWithOwner}
             tabIndex={0}
             onClick={() => onRepoClick(repo)}
             onKeyDown={(event) => {

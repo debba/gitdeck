@@ -847,6 +847,10 @@ async function handleProjectMove(req: IncomingMessage, res: ServerResponse): Pro
 async function handleRepoDetails(res: ServerResponse, u: URL): Promise<void> {
   const repo = u.searchParams.get("repo");
   if (!parseRepo(repo) || !repo) return sendJson(res, 400, { ok: false, error: "invalid repo" });
+  const requestedSection = u.searchParams.get("section") ?? "overview";
+  const section = new Set(["overview", "actions", "commits", "milestones", "releases", "traffic", "minimal"]).has(requestedSection)
+    ? requestedSection
+    : "overview";
 
   async function fetchContributors() {
     return restApiPaginate(`/repos/${repo}/contributors?per_page=100&anon=1`);
@@ -875,19 +879,20 @@ async function handleRepoDetails(res: ServerResponse, u: URL): Promise<void> {
     }
   }
 
+  const emptyResult = (data: unknown) => Promise.resolve({ ok: true as const, data });
   const [meta, languages, contributors, commits, workflows, views, releases, repoDigest, security, milestones, community, counts] = await Promise.all([
     ghApiJson(`/repos/${repo}`),
-    ghApiJson(`/repos/${repo}/languages`),
-    fetchContributors(),
-    ghApiJson(`/repos/${repo}/commits?per_page=20`),
-    ghApiJson(`/repos/${repo}/actions/runs?per_page=100`),
-    ghApiJson(`/repos/${repo}/traffic/views`),
-    fetchReleases(),
-    getLatestRepoDigest(repo),
-    fetchRepoSecuritySummary(repo),
-    ghApiJson(`/repos/${repo}/milestones?state=open&per_page=100&sort=due_on&direction=asc`),
-    ghApiJson(`/repos/${repo}/community/profile`),
-    fetchRepoCounts(),
+    section === "overview" ? ghApiJson(`/repos/${repo}/languages`) : emptyResult({}),
+    section === "overview" ? fetchContributors() : emptyResult([]),
+    section === "commits" ? ghApiJson(`/repos/${repo}/commits?per_page=20`) : emptyResult([]),
+    section === "actions" ? ghApiJson(`/repos/${repo}/actions/runs?per_page=100`) : emptyResult({ workflow_runs: [] }),
+    section === "traffic" ? ghApiJson(`/repos/${repo}/traffic/views`) : emptyResult(null),
+    section === "releases" ? fetchReleases() : emptyResult([]),
+    section === "overview" ? getLatestRepoDigest(repo) : Promise.resolve(null),
+    section === "overview" ? fetchRepoSecuritySummary(repo) : Promise.resolve(null),
+    section === "milestones" ? ghApiJson(`/repos/${repo}/milestones?state=open&per_page=100&sort=due_on&direction=asc`) : emptyResult([]),
+    section === "overview" ? ghApiJson(`/repos/${repo}/community/profile`) : emptyResult(null),
+    section === "overview" ? fetchRepoCounts() : Promise.resolve({ branches: null, discussions: null }),
   ]);
 
   const normalizedReleases = releases.ok

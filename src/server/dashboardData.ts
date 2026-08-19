@@ -1,6 +1,5 @@
 import type { GhIssue, GhPullRequest, GhRepo } from "../types/github";
 import { getActive as getActiveAccount } from "./accountStore";
-import { recordDailyDigest } from "./digests";
 import { AuthRequiredError } from "./githubClient";
 import { getProviderForAccount } from "./providers/registry";
 import type { Account, OwnersOutcome, Provider } from "./providers/types";
@@ -22,7 +21,6 @@ const TTL_MS = 5 * 60 * 1000;
 
 interface Memoized<T extends { ok: boolean }> {
   get(forceFresh: boolean): Promise<T>;
-  peek(): T | null;
   invalidate(): void;
 }
 
@@ -43,9 +41,6 @@ function memoize<T extends { ok: boolean }>(ttlMs: number, fetcher: () => Promis
         }
       })();
       return inflight;
-    },
-    peek() {
-      return cache && cache.expiresAt > Date.now() ? cache.value : null;
     },
     invalidate() {
       cache = null;
@@ -87,9 +82,7 @@ const reposStore = memoize<ReposResult>(TTL_MS, async (): Promise<ReposResult> =
     } catch {
       // Snapshot/history is best-effort.
     }
-    const result: ReposResult = { ok: true, repos, owners: ownersResult.owners, fetchedAt: new Date().toISOString() };
-    maybeRecordDigest(result, issuesStore.peek());
-    return result;
+    return { ok: true, repos, owners: ownersResult.owners, fetchedAt: new Date().toISOString() };
   } catch (error: unknown) {
     if (error instanceof AuthRequiredError) return authFail();
     return genericFail(error);
@@ -103,9 +96,7 @@ const issuesStore = memoize<IssuesResult>(TTL_MS, async (): Promise<IssuesResult
     const active = await resolveActive();
     if (!active) return authFail();
     const issues = await active.provider.listIssues(active.account, ownersResult.owners);
-    const result: IssuesResult = { ok: true, issues, owners: ownersResult.owners, fetchedAt: new Date().toISOString() };
-    maybeRecordDigest(reposStore.peek(), result);
-    return result;
+    return { ok: true, issues, owners: ownersResult.owners, fetchedAt: new Date().toISOString() };
   } catch (error: unknown) {
     if (error instanceof AuthRequiredError) return authFail();
     return genericFail(error);
@@ -125,19 +116,6 @@ const pullRequestsStore = memoize<PullRequestsResult>(TTL_MS, async (): Promise<
     return genericFail(error);
   }
 });
-
-let digestRecordedFor: { reposAt: string; issuesAt: string } | null = null;
-
-function maybeRecordDigest(repos: ReposResult | null, issues: IssuesResult | null): void {
-  if (!repos || !repos.ok || !issues || !issues.ok) return;
-  if (digestRecordedFor && digestRecordedFor.reposAt === repos.fetchedAt && digestRecordedFor.issuesAt === issues.fetchedAt) {
-    return;
-  }
-  digestRecordedFor = { reposAt: repos.fetchedAt, issuesAt: issues.fetchedAt };
-  void recordDailyDigest(repos.repos, issues.issues).catch(() => {
-    digestRecordedFor = null;
-  });
-}
 
 export function getReposCached(forceFresh: boolean): Promise<ReposResult> {
   if (forceFresh) ownersStore.invalidate();
@@ -159,5 +137,4 @@ export function invalidateDataCache(): void {
   reposStore.invalidate();
   issuesStore.invalidate();
   pullRequestsStore.invalidate();
-  digestRecordedFor = null;
 }

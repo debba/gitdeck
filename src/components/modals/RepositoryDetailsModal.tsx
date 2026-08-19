@@ -197,39 +197,69 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadDetails() {
-      setLoading(true);
-      setError("");
-      try {
-        const [detailsResult, issueRefs, codeRefs, dependentRefs, trafficResult] = await Promise.all([
-          fetchRepoDetails(repo.nameWithOwner),
-          fetchMentionIssues(repo.nameWithOwner),
-          fetchMentionCode(repo.nameWithOwner),
-          fetchDependents(repo.nameWithOwner),
-          fetchRepoTraffic(repo.nameWithOwner),
-        ]);
-        if (!cancelled) {
-          setDetails(detailsResult);
-          setMentionIssues(issueRefs.items);
-          setMentionCode(codeRefs.items);
-          setAliases(issueRefs.aliases ?? []);
-          setDependents(dependentRefs.items);
-          setTrafficDetails(trafficResult);
-        }
-      } catch (err) {
-        if (!cancelled) setError((err as Error).message);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+    const section = activeTab === "overview" || activeTab === "actions" || activeTab === "commits" || activeTab === "milestones" || activeTab === "releases"
+      ? activeTab
+      : null;
+    if (!section) {
+      setLoading(false);
+      return;
     }
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    void fetchRepoDetails(repo.nameWithOwner, section, refreshKey > 0)
+      .then((result) => {
+        if (!cancelled) setDetails(result);
+      })
+      .catch((err) => {
+        if (!cancelled) setError((err as Error).message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [activeTab, repo.nameWithOwner, refreshKey]);
 
-    void loadDetails();
-    return () => {
-      cancelled = true;
-    };
-  }, [repo.nameWithOwner, refreshKey]);
+  useEffect(() => {
+    if (activeTab !== "mentions") return;
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    void Promise.all([fetchMentionIssues(repo.nameWithOwner), fetchMentionCode(repo.nameWithOwner)])
+      .then(([issueRefs, codeRefs]) => {
+        if (cancelled) return;
+        setMentionIssues(issueRefs.items);
+        setMentionCode(codeRefs.items);
+        setAliases(issueRefs.aliases ?? []);
+      })
+      .catch((err) => { if (!cancelled) setError((err as Error).message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeTab, repo.nameWithOwner, refreshKey]);
+
+  useEffect(() => {
+    if (activeTab !== "dependents") return;
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    void fetchDependents(repo.nameWithOwner)
+      .then((result) => { if (!cancelled) setDependents(result.items); })
+      .catch((err) => { if (!cancelled) setError((err as Error).message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeTab, repo.nameWithOwner, refreshKey]);
+
+  useEffect(() => {
+    if (activeTab !== "traffic") return;
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    void fetchRepoTraffic(repo.nameWithOwner)
+      .then((result) => { if (!cancelled) setTrafficDetails(result); })
+      .catch((err) => { if (!cancelled) setError((err as Error).message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeTab, repo.nameWithOwner, refreshKey]);
 
   useEffect(() => {
     setContributorsPage(1);
@@ -398,7 +428,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
   const contributors = details?.contributors || [];
   const topics = details?.meta?.topics || [];
   const languages = Object.entries(details?.languages || {}).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  const views = details?.views ?? null;
+  const views = trafficDetails?.views ?? details?.views ?? null;
   const clones = trafficDetails?.clones ?? null;
   const releases = details?.releases ?? [];
   const workflows = details?.workflows ?? [];
@@ -558,7 +588,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
           <section className="repo-detail-stats" aria-label="Repository stats">
             <div className="repo-detail-stat"><StarIcon /><span>Stars</span><strong>{formatNumber(repo.stargazerCount)}</strong></div>
             <div className="repo-detail-stat"><ForkIcon /><span>Forks</span><strong>{formatNumber(repo.forkCount)}</strong></div>
-            <button className="repo-detail-stat action" onClick={() => onIssuesClick(repo.nameWithOwner)}><IssueIcon /><span>Open issues</span><strong>{formatNumber(issueCountForRepo(issues, repo.nameWithOwner))}</strong></button>
+            <button className="repo-detail-stat action" onClick={() => onIssuesClick(repo.nameWithOwner)}><IssueIcon /><span>Open issues</span><strong>{formatNumber(issueCountForRepo(issues, repo.nameWithOwner, repo.openIssueCount))}</strong></button>
           </section>
 
           <section className="repo-detail-grid">

@@ -95,6 +95,7 @@ export interface GhRepo {
   description: string | null;
   stargazerCount: number;
   forkCount: number;
+  openIssueCount?: number;
   primaryLanguage: { name: string } | null;
   updatedAt: string;
   pushedAt: string;

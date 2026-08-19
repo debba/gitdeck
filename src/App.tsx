@@ -67,6 +67,7 @@ import {
   type RepoFilters,
 } from "./utils/dashboard";
 import { clampPage } from "./utils/pagination";
+import { allDashboardResources, dataRequirementsForTab, type DashboardResource } from "./utils/dataRequirements";
 import { getOwner } from "./utils/repository";
 import { formatNumber } from "./utils/format";
 import { clearStatsCache, readStatsCache, writeStatsCache } from "./utils/statsCache";
@@ -164,7 +165,7 @@ type AuthState = "checking" | "anonymous" | "authenticated";
 export function App() {
   const { t } = useI18n();
   const projectsEnabled = useCapability("projects");
-  const { active: activeAccount } = useAccounts();
+  const { active: activeAccount, loading: accountsLoading } = useAccounts();
   const activeAccountId = activeAccount?.id ?? null;
   const location = useLocation();
   const navigate = useNavigate();
@@ -188,6 +189,7 @@ export function App() {
   const [repos, setRepos] = useState<GhRepo[]>([]);
   const [owners, setOwners] = useState<string[]>([]);
   const [repoInsights, setRepoInsights] = useState<RepoInsight[]>([]);
+  const [visibleRepoInsightNames, setVisibleRepoInsightNames] = useState<string[]>([]);
   const [dailyDigests, setDailyDigests] = useState<DailyDigestEntry[]>([]);
   const [digestPeriod, setDigestPeriod] = useState<DigestPeriod>(() => (localStorage.getItem("gh-dash.digestPeriod") as DigestPeriod) || "day");
   const [ciHealth, setCiHealth] = useState<RepoCIHealth[]>([]);
@@ -223,28 +225,28 @@ export function App() {
   const [issuePageSize, setIssuePageSize] = useState(Number(localStorage.getItem("gh-dash.issuesPageSize")) || 20);
   const [prPageSize, setPrPageSize] = useState(Number(localStorage.getItem("gh-dash.prsPageSize")) || 20);
   const [repoPageSize, setRepoPageSize] = useState(Number(localStorage.getItem("gh-dash.reposPageSize")) || 20);
-  const abortRef = useRef<AbortController | null>(null);
-  const initialLoadRef = useRef(false);
+  const abortControllersRef = useRef(new Set<AbortController>());
+  const activeLoadsRef = useRef(0);
+  const loadedAccountRef = useRef<string | null>(null);
 
-  const loadData = useCallback((fresh = false) => {
-    abortRef.current?.abort();
+  const loadData = useCallback((resources: Set<DashboardResource>, fresh = false) => {
     const controller = new AbortController();
-    abortRef.current = controller;
+    abortControllersRef.current.add(controller);
     setError("");
-    setDataStale(true);
 
-    const cachedRepos = peek<ReposData>(CACHE_KEY.repos);
+    const cachedRepos = resources.has("repos") ? peek<ReposData>(CACHE_KEY.repos) : null;
     if (cachedRepos) {
       setRepos(cachedRepos.repos);
       setOwners(cachedRepos.owners);
       setFetchedAt(cachedRepos.fetchedAt);
     }
-    const cachedIssues = peek<IssuesData>(CACHE_KEY.issues);
+    const cachedIssues = resources.has("issues") ? peek<IssuesData>(CACHE_KEY.issues) : null;
     if (cachedIssues) setIssues(cachedIssues.issues);
-    const cachedPrs = peek<PullRequestsData>(CACHE_KEY.prs);
+    const cachedPrs = resources.has("prs") ? peek<PullRequestsData>(CACHE_KEY.prs) : null;
     if (cachedPrs) setPullRequests(cachedPrs.pullRequests);
 
-    // Fall back to localStorage when in-memory cache is empty (page refresh)
+    // Local persisted data costs no provider requests and keeps previously visited
+    // tabs warm after a browser refresh.
     if (!cachedRepos && !cachedIssues && !cachedPrs) {
       const persisted = readStatsCache();
       if (persisted) {
@@ -256,11 +258,20 @@ export function App() {
       }
     }
 
-    let pending = 3;
+    let pending = resources.size;
+    if (!pending) {
+      abortControllersRef.current.delete(controller);
+      return;
+    }
+    activeLoadsRef.current += 1;
     setLoading(true);
+    setDataStale(true);
     const finish = () => {
       pending -= 1;
-      if (pending <= 0 && abortRef.current === controller) {
+      if (pending > 0 || !abortControllersRef.current.has(controller)) return;
+      abortControllersRef.current.delete(controller);
+      activeLoadsRef.current = Math.max(0, activeLoadsRef.current - 1);
+      if (activeLoadsRef.current === 0) {
         setLoading(false);
         setDataStale(false);
       }
@@ -276,37 +287,35 @@ export function App() {
       setError((err as Error).message);
     };
 
-    void swr<ReposData>(CACHE_KEY.repos, (signal) => fetchRepos(fresh, signal), {
-      fresh,
-      signal: controller.signal,
-    }).promise
-      .then((data) => {
+    if (resources.has("repos")) {
+      void swr<ReposData>(CACHE_KEY.repos, (signal) => fetchRepos(fresh, signal), {
+        fresh,
+        signal: controller.signal,
+      }).promise.then((data) => {
         if (controller.signal.aborted) return;
         setRepos(data.repos);
         setOwners(data.owners);
         setFetchedAt(data.fetchedAt);
-      }, handleFailure)
-      .finally(finish);
+      }, handleFailure).finally(finish);
+    }
 
-    void swr<IssuesData>(CACHE_KEY.issues, (signal) => fetchIssues(fresh, signal), {
-      fresh,
-      signal: controller.signal,
-    }).promise
-      .then((data) => {
-        if (controller.signal.aborted) return;
-        setIssues(data.issues);
-      }, handleFailure)
-      .finally(finish);
+    if (resources.has("issues")) {
+      void swr<IssuesData>(CACHE_KEY.issues, (signal) => fetchIssues(fresh, signal), {
+        fresh,
+        signal: controller.signal,
+      }).promise.then((data) => {
+        if (!controller.signal.aborted) setIssues(data.issues);
+      }, handleFailure).finally(finish);
+    }
 
-    void swr<PullRequestsData>(CACHE_KEY.prs, (signal) => fetchPullRequests(fresh, signal), {
-      fresh,
-      signal: controller.signal,
-    }).promise
-      .then((data) => {
-        if (controller.signal.aborted) return;
-        setPullRequests(data.pullRequests);
-      }, handleFailure)
-      .finally(finish);
+    if (resources.has("prs")) {
+      void swr<PullRequestsData>(CACHE_KEY.prs, (signal) => fetchPullRequests(fresh, signal), {
+        fresh,
+        signal: controller.signal,
+      }).promise.then((data) => {
+        if (!controller.signal.aborted) setPullRequests(data.pullRequests);
+      }, handleFailure).finally(finish);
+    }
   }, []);
 
   useEffect(() => {
@@ -325,28 +334,43 @@ export function App() {
 
   useEffect(() => {
     if (authState !== "authenticated") {
-      initialLoadRef.current = false;
+      loadedAccountRef.current = null;
       return;
     }
-    if (!initialLoadRef.current) {
-      initialLoadRef.current = true;
-      loadData();
-      return;
-    }
-    setIssues([]);
-    setPullRequests([]);
-    setRepos([]);
-    setOwners([]);
-    setRepoInsights([]);
-    setDailyDigests([]);
-    setCiHealth([]);
-    setNotifications([]);
-    setFetchedAt("");
-    clearStatsCache();
-    loadData(true);
-  }, [authState, activeAccountId, loadData]);
+    if (accountsLoading) return;
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+    const accountKey = activeAccountId ?? authLogin ?? "authenticated";
+    const accountChanged = loadedAccountRef.current !== null && loadedAccountRef.current !== accountKey;
+    if (accountChanged) {
+      for (const controller of abortControllersRef.current) controller.abort();
+      abortControllersRef.current.clear();
+      activeLoadsRef.current = 0;
+      setLoading(false);
+      setDataStale(false);
+      setIssues([]);
+      setPullRequests([]);
+      setRepos([]);
+      setOwners([]);
+      setRepoInsights([]);
+      setDailyDigests([]);
+      setCiHealth([]);
+      setNotifications([]);
+      setFetchedAt("");
+      clearStatsCache();
+    }
+    loadedAccountRef.current = accountKey;
+    loadData(dataRequirementsForTab(tab, Boolean(routeRepoName), repoDetailTab), accountChanged);
+  }, [authState, accountsLoading, activeAccountId, authLogin, tab, routeRepoName, repoDetailTab, loadData]);
+
+  useEffect(() => {
+    if (authState !== "authenticated" || !paletteOpen) return;
+    loadData(allDashboardResources());
+  }, [authState, paletteOpen, loadData]);
+
+  useEffect(() => () => {
+    for (const controller of abortControllersRef.current) controller.abort();
+    abortControllersRef.current.clear();
+  }, []);
 
   // Persist dashboard data to localStorage for instant display on next page load
   useEffect(() => {
@@ -359,24 +383,6 @@ export function App() {
       fetchedAt,
     });
   }, [repos, owners, issues, pullRequests, fetchedAt]);
-
-  useEffect(() => {
-    if (authState !== "authenticated") return;
-    if (tab !== "insights" && tab !== "alerts" && tab !== "repos") return;
-    const cached = peek<RepoInsightsData>(CACHE_KEY.insights);
-    if (cached) setRepoInsights(cached.insights);
-    const controller = new AbortController();
-    swr<RepoInsightsData>(
-      CACHE_KEY.insights,
-      (signal) => fetchRepoInsights(false, signal),
-      { signal: controller.signal },
-    ).promise
-      .then((data) => {
-        if (!controller.signal.aborted) setRepoInsights(data.insights);
-      })
-      .catch(() => {});
-    return () => controller.abort();
-  }, [tab, authState, activeAccountId]);
 
   useEffect(() => {
     if (authState !== "authenticated") return;
@@ -416,7 +422,9 @@ export function App() {
   }, [digestPeriod]);
 
   async function handleLogout() {
-    abortRef.current?.abort();
+    for (const controller of abortControllersRef.current) controller.abort();
+    abortControllersRef.current.clear();
+    activeLoadsRef.current = 0;
     try {
       await logoutAuth();
     } catch {
@@ -504,15 +512,15 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (authState !== "authenticated") return;
-    void refreshNotifications(true);
-  }, [authState, activeAccountId, refreshNotifications]);
+    if (authState !== "authenticated" || tab !== "inbox") return;
+    void refreshNotifications();
+  }, [authState, activeAccountId, tab, refreshNotifications]);
 
   useEffect(() => {
-    if (authState !== "authenticated" || !pollInterval) return;
+    if (authState !== "authenticated" || tab !== "inbox" || !pollInterval) return;
     const id = window.setInterval(() => { void refreshNotifications(); }, Math.max(30, pollInterval) * 1000);
     return () => window.clearInterval(id);
-  }, [authState, pollInterval, refreshNotifications]);
+  }, [authState, tab, pollInterval, refreshNotifications]);
 
   const handleMarkRead = useCallback(async (threadId: string) => {
     setNotifications((prev) => prev.map((entry) => (entry.id === threadId ? { ...entry, unread: false } : entry)));
@@ -621,6 +629,53 @@ export function App() {
   const visibleIssues = filteredIssues.slice((issuePageSafe - 1) * issuePageSize, issuePageSafe * issuePageSize);
   const visiblePullRequests = filteredPullRequests.slice((prPageSafe - 1) * prPageSize, prPageSafe * prPageSize);
   const visibleRepos = filteredRepos.slice((repoPageSafe - 1) * repoPageSize, repoPageSafe * repoPageSize);
+  const repoInsightTargets = tab === "repos"
+    ? (repoSort.startsWith("health_")
+      ? filteredRepos.map((repo) => repo.nameWithOwner)
+      : visibleRepoInsightNames.filter((repo) => visibleRepos.some((entry) => entry.nameWithOwner === repo)))
+      .filter((repo) => !insightsByRepo.has(repo))
+      .sort()
+    : [];
+  const repoInsightTargetKey = repoInsightTargets.join("\n");
+  const handleVisibleRepoInsightsChange = useCallback((names: string[]) => {
+    setVisibleRepoInsightNames((current) => {
+      if (current.length === names.length && current.every((name, index) => name === names[index])) return current;
+      return names;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (authState !== "authenticated") return;
+    if (tab !== "repos" && tab !== "insights" && tab !== "alerts") return;
+    const targeted = tab === "repos";
+    if (targeted && !repoInsightTargets.length) return;
+    const cacheKey = targeted
+      ? `${CACHE_KEY.insights}?${new URLSearchParams(repoInsightTargets.map((repo) => ["repo", repo])).toString()}`
+      : CACHE_KEY.insights;
+    const cached = peek<RepoInsightsData>(cacheKey);
+    if (cached) {
+      if (!targeted) setRepoInsights(cached.insights);
+      else setRepoInsights((current) => {
+        const merged = new Map(current.map((insight) => [insight.repo, insight]));
+        for (const insight of cached.insights) merged.set(insight.repo, insight);
+        return [...merged.values()];
+      });
+    }
+    const controller = new AbortController();
+    swr<RepoInsightsData>(cacheKey, (signal) => fetchRepoInsights(false, signal, repoInsightTargets), {
+      signal: controller.signal,
+    }).promise.then((data) => {
+      if (controller.signal.aborted) return;
+      if (!targeted) setRepoInsights(data.insights);
+      else setRepoInsights((current) => {
+        const merged = new Map(current.map((insight) => [insight.repo, insight]));
+        for (const insight of data.insights) merged.set(insight.repo, insight);
+        return [...merged.values()];
+      });
+    }).catch(() => {});
+    return () => controller.abort();
+  }, [tab, authState, activeAccountId, repoInsightTargetKey]);
+
   const draftCount = pullRequests.filter((pr) => pr.isDraft).length;
   const awaitingReviewCount = pullRequests.filter((pr) => !pr.isDraft && pr.reviewsCount === 0).length;
   const approvedCount = pullRequests.filter((pr) => pr.reviewDecision === "APPROVED").length;
@@ -752,7 +807,8 @@ export function App() {
         onHideArchivedNoiseChange={setHideArchivedNoise}
         authLogin={authLogin}
         owners={owners}
-        onRefresh={() => loadData(true)}
+        githubAvatars={activeAccount?.providerKind === "github"}
+        onRefresh={() => loadData(dataRequirementsForTab(tab, Boolean(routeRepoName), repoDetailTab), true)}
         onOpenFilters={() => setFiltersOpen(true)}
         onOpenPalette={() => setPaletteOpen(true)}
         onLogout={() => void handleLogout()}
@@ -777,6 +833,7 @@ export function App() {
           onClose={() => setFiltersOpen(false)}
           authLogin={authLogin || undefined}
           inbox={inboxSidebar}
+          githubAvatars={activeAccount?.providerKind === "github"}
         />
         <main className={`main${dataStale ? " data-stale" : ""}`}>
           {error ? <div className="error">{error}</div> : null}
@@ -914,6 +971,7 @@ export function App() {
                 onIssuesClick={(repo) => { setIssueFilters({ ...issueFilters, repos: new Set([repo]) }); navigateTab("issues"); }}
                 onStarsClick={(repo) => openMetricModal(repo, "stars")}
                 onForksClick={(repo) => openMetricModal(repo, "forks")}
+                onVisibleReposChange={handleVisibleRepoInsightsChange}
               />
               <Pagination totalItems={filteredRepos.length} page={repoPageSafe} pageSize={repoPageSize} onPageChange={setRepoPage} onPageSizeChange={(size) => { setRepoPageSize(size); setRepoPage(1); }} />
             </div>
@@ -998,7 +1056,7 @@ export function App() {
           pullRequests={pullRequests}
           onNavigateTab={(next) => navigateTab(next)}
           onOpenRepo={(repo) => openRepoModal(repo)}
-          onRefresh={() => loadData(true)}
+          onRefresh={() => loadData(allDashboardResources(), true)}
           onToggleTheme={cycleTheme}
           onClose={() => setPaletteOpen(false)}
         />

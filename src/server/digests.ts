@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { DailyRepoDigest, GhIssue, GhRepo } from "../types/github";
 import { buildDailyDigestEntries, buildDailyDigestRecord, buildPeriodDigestEntries, type DailyDigestRecord, type DigestPeriod } from "../utils/digests";
 import { DATA_DIR, DIGESTS_PATH } from "./config";
+import { getIssuesCached, getReposCached } from "./dashboardData";
 import { sendJsonCacheable } from "./http";
 import { fetchRepoSecuritySummary } from "./securityAlerts";
 import { maybeGenerateOpenAIDigest } from "./openaiDigest";
@@ -46,7 +47,10 @@ export async function recordDailyDigest(repos: GhRepo[], issues: GhIssue[]): Pro
       }
     }),
   );
-  const today = buildDailyDigestRecord(activeRepos, issues, Date.now(), new Map(securityEntries.map(([repo, summary]) => [repo, summary])));
+  const today = buildDailyDigestRecord(activeRepos, issues, Date.now(), new Map(securityEntries.map(([repo, summary]) => [repo, {
+    securityAlertsCount: summary.totalOpen,
+    securityAlertsUnavailable: summary.unavailable,
+  }])));
   const existing = digests.find((entry) => entry.date === today.date);
   if (existing) {
     Object.assign(existing, today);
@@ -65,6 +69,16 @@ function parsePeriod(value: string | null): DigestPeriod {
 
 export async function handleDailyDigests(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const records = await loadDigests();
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Building a digest can fan out into security API requests for every active
+  // repository. Do it only when the digest view is explicitly requested, never
+  // as a side effect of loading ordinary dashboard data.
+  if (records[records.length - 1]?.date !== today) {
+    const [repos, issues] = await Promise.all([getReposCached(false), getIssuesCached(false)]);
+    if (repos.ok && issues.ok) await recordDailyDigest(repos.repos, issues.issues);
+  }
+
   const latest = records[records.length - 1];
   if (latest && !latest.ai) {
     try {
