@@ -318,6 +318,8 @@ export class GitHubProvider implements Provider {
           isPrivate: node.isPrivate,
           isArchived: node.isArchived,
           isFork: node.isFork,
+          isTemplate: node.isTemplate,
+          viewerPermission: node.viewerPermission,
           url: node.url,
         });
       }
@@ -507,7 +509,7 @@ query($owner: String!, $cursor: String) {
         primaryLanguage { name }
         updatedAt pushedAt
         visibility
-        isPrivate isArchived isFork url
+        isPrivate isArchived isFork isTemplate viewerPermission url
       }
     }
   }
@@ -619,6 +621,8 @@ interface RepoNode {
   isPrivate: boolean;
   isArchived: boolean;
   isFork: boolean;
+  isTemplate: boolean;
+  viewerPermission: string | null;
   url: string;
 }
 

@@ -20,4 +20,4 @@ export const ISSUE_FIELDS =
   "repository,title,url,number,createdAt,updatedAt,author,labels,commentsCount,assignees";
 
 export const REPO_FIELDS =
-  "nameWithOwner,name,owner,description,stargazerCount,forkCount,primaryLanguage,updatedAt,pushedAt,visibility,isPrivate,isArchived,isFork,url";
+  "nameWithOwner,name,owner,description,stargazerCount,forkCount,primaryLanguage,updatedAt,pushedAt,visibility,isPrivate,isArchived,isFork,isTemplate,viewerPermission,url";

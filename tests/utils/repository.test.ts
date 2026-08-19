@@ -3,6 +3,7 @@ import {
   getOwner,
   getRepositoryName,
   nameWithOwnerFromApiUrl,
+  normalizePinnedRepositoryTabs,
   parseRepositoryName,
 } from "../../src/utils/repository";
 
@@ -29,5 +30,25 @@ describe("repository utilities", () => {
 
   it("returns the input unchanged when it is not a repository API url", () => {
     expect(nameWithOwnerFromApiUrl("openai/codex")).toBe("openai/codex");
+  });
+
+  it("normalizes pinned repository tabs", () => {
+    expect(normalizePinnedRepositoryTabs(null)).toEqual(["overview", "pull-requests", "issues"]);
+    expect(normalizePinnedRepositoryTabs(["issues", "commits", "issues", "invalid", "forks"])).toEqual([
+      "issues",
+      "commits",
+      "forks",
+    ]);
+  });
+
+  it("limits the number of pinned repository tabs", () => {
+    expect(normalizePinnedRepositoryTabs([
+      "overview",
+      "actions",
+      "commits",
+      "pull-requests",
+      "issues",
+      "milestones",
+    ])).toHaveLength(5);
   });
 });

@@ -58,6 +58,10 @@ export function MailOpenIcon() {
   return <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-9" /><path d="M22 10l-10 6L2 10" /><path d="M22 10L12 3 2 10" /></svg>;
 }
 
+export function PinIcon({ filled = false }: { filled?: boolean }) {
+  return <svg width={13} height={13} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 17v5" /><path d="M5 17h14" /><path d="m7 3 1.5 7L6 13v2h12v-2l-2.5-3L17 3z" /></svg>;
+}
+
 export function RefreshIcon() {
   return <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>;
 }
