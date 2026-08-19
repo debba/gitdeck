@@ -22,6 +22,7 @@ import type { RepositoryDetailTab } from "../../utils/repository";
 import { clampPage } from "../../utils/pagination";
 import { Pagination } from "../common/Pagination";
 import { CloseIcon, ForkIcon, IssueIcon, PinIcon, RefreshIcon, StarIcon } from "../common/Icons";
+import { Markdown } from "../common/Markdown";
 
 interface RepositoryDetailsModalProps {
   repo: GhRepo;
@@ -1039,7 +1040,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                           <em>{release.tag_name}</em>
                         </a>
                         {release.body?.trim() ? (
-                          <div className="repo-detail-release-notes">{release.body.trim()}</div>
+                          <Markdown className="repo-detail-release-notes" baseUrl={repo.url}>{release.body.trim()}</Markdown>
                         ) : null}
                         {release.assets.length ? (
                           release.assets.map((asset) => (
