@@ -311,6 +311,7 @@ export class GitHubProvider implements Provider {
           description: node.description,
           stargazerCount: node.stargazerCount,
           forkCount: node.forkCount,
+          openIssueCount: node.issues.totalCount,
           primaryLanguage: node.primaryLanguage,
           updatedAt: node.updatedAt,
           pushedAt: node.pushedAt,
@@ -506,6 +507,7 @@ query($owner: String!, $cursor: String) {
         nameWithOwner name
         owner { login avatarUrl }
         description stargazerCount forkCount
+        issues(states: OPEN) { totalCount }
         primaryLanguage { name }
         updatedAt pushedAt
         visibility
@@ -614,6 +616,7 @@ interface RepoNode {
   description: string | null;
   stargazerCount: number;
   forkCount: number;
+  issues: { totalCount: number };
   primaryLanguage: { name: string } | null;
   updatedAt: string;
   pushedAt: string;

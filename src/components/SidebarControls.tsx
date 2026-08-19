@@ -45,6 +45,7 @@ interface SidebarControlsProps {
   onClose: () => void;
   authLogin?: string;
   inbox?: InboxSidebarState;
+  githubAvatars?: boolean;
 }
 
 function toggleSetValue(values: Set<string>, value: string): Set<string> {
@@ -96,7 +97,7 @@ function CheckList({
             <input type="checkbox" checked={selected.has(name)} onChange={() => onToggle(name)} />
             {showSwatch && color ? <span className="label-swatch" style={{ background: `#${color}` }} /> : null}
             {languageDot ? <span className="label-swatch" style={{ borderRadius: "50%", background: getLanguageColor(name) }} /> : null}
-            {showGhAvatar ? <img src={`https://github.com/${name}.png?size=32`} alt="" style={{ width: 16, height: 16, borderRadius: "50%", flexShrink: 0 }} /> : null}
+            {showGhAvatar ? <img src={`https://github.com/${name}.png?size=32`} alt="" loading="lazy" referrerPolicy="no-referrer" style={{ width: 16, height: 16, borderRadius: "50%", flexShrink: 0 }} /> : null}
             <span className="label-text">{name}</span>
             <span className="label-count">{countOf(value)}</span>
           </label>
@@ -149,7 +150,7 @@ function FilterSection({ title, activeCount, children, dataFor, open = false, on
           <span className={`count ${activeCount ? "active" : ""}`}>{activeCount}</span>
         )}
       </summary>
-      <div className="section-body">{children}</div>
+      {effectiveOpen ? <div className="section-body">{children}</div> : null}
     </details>
   );
 }
@@ -171,6 +172,7 @@ export function SidebarControls({
   onClose,
   authLogin,
   inbox,
+  githubAvatars = true,
 }: SidebarControlsProps) {
   const { t } = useI18n();
   const inboxMode = tab === "inbox";
@@ -252,7 +254,7 @@ export function SidebarControls({
         <CheckList
           entries={[...orgEntries.entries()]}
           selected={orgSelection}
-          showGhAvatar
+          showGhAvatar={githubAvatars}
           userLogin={authLogin || undefined}
           onToggle={(value) => ticketMode
             ? onActiveFiltersChange({ ...activeFilters, orgs: toggleSetValue(activeFilters.orgs, value) })

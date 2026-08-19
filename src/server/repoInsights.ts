@@ -74,25 +74,28 @@ const INSIGHTS_TTL_MS = 15 * 60 * 1000;
 let insightsCache: { value: { ok: true; generatedAt: string; insights: RepoInsight[] }; expiresAt: number } | null = null;
 let inflight: Promise<{ ok: true; generatedAt: string; insights: RepoInsight[] } | { ok: false; error: string }> | null = null;
 
+async function buildRepoInsights(forceFresh: boolean, requestedRepos?: Set<string>) {
+  const [repos, issues] = await Promise.all([getReposCached(forceFresh), getIssuesCached(forceFresh)]);
+  if (!repos.ok) return repos;
+  if (!issues.ok) return issues;
+
+  const activeRepos = repos.repos.filter((repo) => !repo.isArchived && (!requestedRepos || requestedRepos.has(repo.nameWithOwner)));
+  const insights = await mapWithConcurrency(activeRepos, 6, async (repo) => fetchInsightForRepo(repo, issues.issues));
+  return {
+    ok: true as const,
+    generatedAt: new Date().toISOString(),
+    insights: insights.sort((a, b) => a.healthScore - b.healthScore || b.issueCount - a.issueCount || a.repo.localeCompare(b.repo)),
+  };
+}
+
 export async function getRepoInsightsCached(forceFresh: boolean) {
   if (!forceFresh && insightsCache && insightsCache.expiresAt > Date.now()) return insightsCache.value;
   if (inflight) return inflight;
 
-  inflight = (async () => {
-    const [repos, issues] = await Promise.all([getReposCached(forceFresh), getIssuesCached(forceFresh)]);
-    if (!repos.ok) return repos;
-    if (!issues.ok) return issues;
-
-    const activeRepos = repos.repos.filter((repo) => !repo.isArchived);
-    const insights = await mapWithConcurrency(activeRepos, 6, async (repo) => fetchInsightForRepo(repo, issues.issues));
-    const result = {
-      ok: true as const,
-      generatedAt: new Date().toISOString(),
-      insights: insights.sort((a, b) => a.healthScore - b.healthScore || b.issueCount - a.issueCount || a.repo.localeCompare(b.repo)),
-    };
-    insightsCache = { value: result, expiresAt: Date.now() + INSIGHTS_TTL_MS };
+  inflight = buildRepoInsights(forceFresh).then((result) => {
+    if (result.ok) insightsCache = { value: result, expiresAt: Date.now() + INSIGHTS_TTL_MS };
     return result;
-  })().finally(() => {
+  }).finally(() => {
     inflight = null;
   });
 
@@ -101,6 +104,9 @@ export async function getRepoInsightsCached(forceFresh: boolean) {
 
 export async function handleRepoInsights(req: IncomingMessage, res: ServerResponse, u: URL): Promise<void> {
   const fresh = u.searchParams.get("fresh") === "1";
-  const payload = await getRepoInsightsCached(fresh);
+  const requestedRepos = new Set(u.searchParams.getAll("repo").filter(Boolean));
+  const payload = requestedRepos.size
+    ? await buildRepoInsights(fresh, requestedRepos)
+    : await getRepoInsightsCached(fresh);
   sendJsonCacheable(req, res, payload.ok ? 200 : 500, payload);
 }

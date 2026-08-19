@@ -1,4 +1,4 @@
-import { getEtag, peek, setEtag } from "./cache";
+import { getEtag, peek, setEtag, swr } from "./cache";
 import type {
   ApiError,
   CIHealthData,
@@ -198,9 +198,12 @@ export function fetchForks(params: {
   return readJson(`/api/forks?${query.toString()}`);
 }
 
-export function fetchRepoDetails(repo: string): Promise<RepoDetailsData> {
-  const query = new URLSearchParams({ repo });
-  return readJson(`/api/repo-details?${query.toString()}`);
+export type RepoDetailsSection = "overview" | "actions" | "commits" | "milestones" | "releases" | "traffic" | "minimal";
+
+export function fetchRepoDetails(repo: string, section: RepoDetailsSection = "overview", fresh = false): Promise<RepoDetailsData> {
+  const query = new URLSearchParams({ repo, section });
+  const url = `/api/repo-details?${query.toString()}`;
+  return swr<RepoDetailsData>(url, () => readJson(url, undefined, url), { fresh }).promise;
 }
 
 export function fetchRepoBranches(repo: string): Promise<{ ok: true; totalCount: number; defaultBranch: string | null; branches: RepoBranch[] }> {
@@ -252,8 +255,13 @@ export function fetchRepoTraffic(repo: string): Promise<RepoTrafficDetails> {
   return readJson(`/api/mentions/referrers?${query.toString()}`);
 }
 
-export function fetchRepoInsights(fresh = false, signal?: AbortSignal): Promise<RepoInsightsData> {
-  return readJson(`/api/repo-insights${fresh ? "?fresh=1" : ""}`, withSignal(signal), "/api/repo-insights");
+export function fetchRepoInsights(fresh = false, signal?: AbortSignal, repos: string[] = []): Promise<RepoInsightsData> {
+  const query = new URLSearchParams();
+  if (fresh) query.set("fresh", "1");
+  for (const repo of repos) query.append("repo", repo);
+  const suffix = query.size ? `?${query.toString()}` : "";
+  const cacheKey = repos.length ? `/api/repo-insights?${new URLSearchParams([...repos].sort().map((repo) => ["repo", repo])).toString()}` : "/api/repo-insights";
+  return readJson(`/api/repo-insights${suffix}`, withSignal(signal), cacheKey);
 }
 
 export function fetchDailyDigests(signal?: AbortSignal, period: "day" | "week" | "month" = "day"): Promise<DailyDigestsData> {

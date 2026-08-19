@@ -41,8 +41,9 @@ export interface RepoFilters {
 
 export type FacetValue = number | { count: number; color?: string };
 
-export function issueCountForRepo(issues: GhIssue[], nameWithOwner: string): number {
-  return issues.filter((issue) => issue.repository.nameWithOwner === nameWithOwner).length;
+export function issueCountForRepo(issues: GhIssue[], nameWithOwner: string, fallback = 0): number {
+  const count = issues.filter((issue) => issue.repository.nameWithOwner === nameWithOwner).length;
+  return count || fallback;
 }
 
 export function pullRequestCountForRepo(prs: GhPullRequest[], nameWithOwner: string): number {
@@ -178,7 +179,7 @@ export function filterRepos(repos: GhRepo[], issues: GhIssue[], filters: RepoFil
     if (!filters.includeForks && repo.isFork) return false;
     if (!filters.includeArchived && repo.isArchived) return false;
     if (!query) return true;
-    return [repo.nameWithOwner, repo.description || "", language, String(issueCountForRepo(issues, repo.nameWithOwner))]
+    return [repo.nameWithOwner, repo.description || "", language, String(issueCountForRepo(issues, repo.nameWithOwner, repo.openIssueCount))]
       .join(" ")
       .toLowerCase()
       .includes(query);
@@ -278,7 +279,7 @@ export function sortIssues(issues: GhIssue[], sort: string): GhIssue[] {
 export function sortRepos(repos: GhRepo[], issues: GhIssue[], sort: string, insightsByRepo?: Map<string, RepoInsight>): GhRepo[] {
   const sorted = [...repos];
   sorted.sort((a, b) => {
-    const issueDelta = issueCountForRepo(issues, b.nameWithOwner) - issueCountForRepo(issues, a.nameWithOwner);
+    const issueDelta = issueCountForRepo(issues, b.nameWithOwner, b.openIssueCount) - issueCountForRepo(issues, a.nameWithOwner, a.openIssueCount);
     const healthDelta = (insightsByRepo?.get(b.nameWithOwner)?.healthScore ?? 0) - (insightsByRepo?.get(a.nameWithOwner)?.healthScore ?? 0);
     if (sort === "stars_asc") return a.stargazerCount - b.stargazerCount;
     if (sort === "forks_desc") return b.forkCount - a.forkCount;

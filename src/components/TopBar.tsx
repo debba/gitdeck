@@ -16,6 +16,7 @@ interface TopBarProps {
   hideArchivedNoise: boolean;
   authLogin: string | null;
   owners: string[];
+  githubAvatars?: boolean;
   onThemeChange: (theme: Theme) => void;
   onTextSizeChange: (textSize: TextSize) => void;
   onHideArchivedNoiseChange: (hideArchivedNoise: boolean) => void;
@@ -35,6 +36,7 @@ export function TopBar({
   hideArchivedNoise,
   authLogin,
   owners,
+  githubAvatars = true,
   onThemeChange,
   onTextSizeChange,
   onHideArchivedNoiseChange,
@@ -75,11 +77,11 @@ export function TopBar({
         {/* Wrapper for logo + org badges. Logo keeps its original overflow:hidden for border-radius. */}
         <div style={{ position: "relative", flexShrink: 0 }}>
           <div className="logo">
-            <img src={authLogin ? `https://github.com/${authLogin}.png?size=80` : appLogo} alt="" />
+            <img src={authLogin && githubAvatars ? `https://github.com/${authLogin}.png?size=80` : appLogo} alt="" referrerPolicy="no-referrer" />
           </div>
           {/* Org badges: positioned relative to wrapper, outside logo's overflow:hidden */}
-          {orgs.length > 0 && orgs.slice(0, 3).map((org, i) => (
-            <img key={org} src={`https://github.com/${org}.png?size=40`} alt={org} title={org}
+          {githubAvatars && orgs.length > 0 && orgs.slice(0, 3).map((org, i) => (
+            <img key={org} src={`https://github.com/${org}.png?size=40`} alt={org} title={org} loading="lazy" referrerPolicy="no-referrer"
               style={{ position: "absolute", bottom: -4, right: -4 + i * 8, width: 20, height: 20, borderRadius: "50%", objectFit: "contain", objectPosition: "55% center", zIndex: 3 - i, border: "1px solid var(--border-soft)", background: "color-mix(in srgb, var(--panel) 85%, transparent)" }} />
           ))}
         </div>

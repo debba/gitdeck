@@ -36,6 +36,7 @@ interface ForgejoRepo {
   stars_count?: number;
   stargazers_count?: number;
   forks_count: number;
+  open_issues_count?: number;
   language?: string | null;
   updated_at: string;
   pushed_at?: string;
@@ -188,6 +189,7 @@ function normalizeRepo(raw: ForgejoRepo): GhRepo {
     description: raw.description,
     stargazerCount: raw.stars_count ?? raw.stargazers_count ?? 0,
     forkCount: raw.forks_count ?? 0,
+    openIssueCount: raw.open_issues_count ?? 0,
     primaryLanguage: raw.language ? { name: raw.language } : null,
     updatedAt: raw.updated_at,
     pushedAt: raw.pushed_at ?? raw.updated_at,
