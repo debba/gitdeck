@@ -4,6 +4,7 @@ import { AuthRequiredError } from "./githubClient";
 import { getProviderForAccount } from "./providers/registry";
 import type { Account, OwnersOutcome, Provider } from "./providers/types";
 import { attachHistory, recordSnapshots } from "./snapshots";
+import { measureProviderCall } from "./providerDiagnostics";
 
 export type ReposResult =
   | { ok: true; repos: GhRepo[]; owners: string[]; fetchedAt: string }
@@ -66,7 +67,7 @@ async function resolveActive(): Promise<{ account: Account; provider: Provider }
 const ownersStore = memoize<OwnersOutcome>(TTL_MS, async (): Promise<OwnersOutcome> => {
   const active = await resolveActive();
   if (!active) return authFail();
-  return active.provider.listOwners(active.account);
+  return measureProviderCall("owners", () => active.provider.listOwners(active.account));
 });
 
 const reposStore = memoize<ReposResult>(TTL_MS, async (): Promise<ReposResult> => {
@@ -75,7 +76,7 @@ const reposStore = memoize<ReposResult>(TTL_MS, async (): Promise<ReposResult> =
   try {
     const active = await resolveActive();
     if (!active) return authFail();
-    const repos = await active.provider.listRepos(active.account, ownersResult.owners);
+    const repos = await measureProviderCall("repos", () => active.provider.listRepos(active.account, ownersResult.owners));
     try {
       await recordSnapshots(repos);
       await attachHistory(repos);
@@ -95,7 +96,7 @@ const issuesStore = memoize<IssuesResult>(TTL_MS, async (): Promise<IssuesResult
   try {
     const active = await resolveActive();
     if (!active) return authFail();
-    const issues = await active.provider.listIssues(active.account, ownersResult.owners);
+    const issues = await measureProviderCall("issues", () => active.provider.listIssues(active.account, ownersResult.owners));
     return { ok: true, issues, owners: ownersResult.owners, fetchedAt: new Date().toISOString() };
   } catch (error: unknown) {
     if (error instanceof AuthRequiredError) return authFail();
@@ -109,7 +110,7 @@ const pullRequestsStore = memoize<PullRequestsResult>(TTL_MS, async (): Promise<
   try {
     const active = await resolveActive();
     if (!active) return authFail();
-    const pullRequests = await active.provider.listPullRequests(active.account, ownersResult.owners);
+    const pullRequests = await measureProviderCall("pullRequests", () => active.provider.listPullRequests(active.account, ownersResult.owners));
     return { ok: true, pullRequests, owners: ownersResult.owners, fetchedAt: new Date().toISOString() };
   } catch (error: unknown) {
     if (error instanceof AuthRequiredError) return authFail();

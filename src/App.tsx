@@ -1,15 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  AuthRequiredClientError,
   fetchAuthStatus,
   fetchCIHealth,
   fetchDailyDigests,
-  fetchIssues,
   fetchNotifications,
-  fetchPullRequests,
   fetchRepoInsights,
-  fetchRepos,
   logoutAuth,
   markAllNotificationsRead,
   markNotificationRead,
@@ -40,16 +36,11 @@ import type {
   DailyDigestEntry,
   DailyDigestsData,
   DigestPeriod,
-  GhIssue,
   GhNotification,
-  GhPullRequest,
   GhRepo,
-  IssuesData,
-  PullRequestsData,
   RepoCIHealth,
   RepoInsight,
   RepoInsightsData,
-  ReposData,
 } from "./types/github";
 import { buildInboxItems, INBOX_MAILBOXES, matchesInboxMailbox, mergeNotifications, type InboxMailbox } from "./utils/inbox";
 import {
@@ -67,13 +58,14 @@ import {
   type RepoFilters,
 } from "./utils/dashboard";
 import { clampPage } from "./utils/pagination";
-import { allDashboardResources, dataRequirementsForTab, type DashboardResource } from "./utils/dataRequirements";
+import { dataRequirementsForTab } from "./utils/dataRequirements";
 import { getOwner } from "./utils/repository";
 import { formatNumber } from "./utils/format";
-import { clearStatsCache, readStatsCache, writeStatsCache } from "./utils/statsCache";
+import { clearStatsCache } from "./utils/statsCache";
 import { clearFiltersCache, hydrateFilters, readFiltersCache, writeFiltersCache } from "./utils/filtersCache";
 import { useI18n } from "./i18n/I18nProvider";
 import { useAccounts, useCapability } from "./contexts/AccountContext";
+import { useDashboardData } from "./hooks/useDashboardData";
 
 type Tab = "inbox" | "repos" | "issues" | "prs" | "kanban" | "insights" | "alerts" | "ci" | "digests";
 type Theme = "dark" | "light" | "auto";
@@ -184,19 +176,12 @@ export function App() {
   const [authState, setAuthState] = useState<AuthState>("checking");
   const [authLogin, setAuthLogin] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<"device" | "gh-cli" | "token">("device");
-  const [issues, setIssues] = useState<GhIssue[]>([]);
-  const [pullRequests, setPullRequests] = useState<GhPullRequest[]>([]);
-  const [repos, setRepos] = useState<GhRepo[]>([]);
-  const [owners, setOwners] = useState<string[]>([]);
   const [repoInsights, setRepoInsights] = useState<RepoInsight[]>([]);
   const [visibleRepoInsightNames, setVisibleRepoInsightNames] = useState<string[]>([]);
   const [dailyDigests, setDailyDigests] = useState<DailyDigestEntry[]>([]);
   const [digestPeriod, setDigestPeriod] = useState<DigestPeriod>(() => (localStorage.getItem("gh-dash.digestPeriod") as DigestPeriod) || "day");
   const [ciHealth, setCiHealth] = useState<RepoCIHealth[]>([]);
-  const [fetchedAt, setFetchedAt] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [dataStale, setDataStale] = useState(false);
-  const [error, setError] = useState("");
+  const [boardCount, setBoardCount] = useState(0);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [contributorsOpen, setContributorsOpen] = useState(false);
   const [changelogOpen, setChangelogOpen] = useState(false);
@@ -225,98 +210,39 @@ export function App() {
   const [issuePageSize, setIssuePageSize] = useState(Number(localStorage.getItem("gh-dash.issuesPageSize")) || 20);
   const [prPageSize, setPrPageSize] = useState(Number(localStorage.getItem("gh-dash.prsPageSize")) || 20);
   const [repoPageSize, setRepoPageSize] = useState(Number(localStorage.getItem("gh-dash.reposPageSize")) || 20);
-  const abortControllersRef = useRef(new Set<AbortController>());
-  const activeLoadsRef = useRef(0);
-  const loadedAccountRef = useRef<string | null>(null);
-
-  const loadData = useCallback((resources: Set<DashboardResource>, fresh = false) => {
-    const controller = new AbortController();
-    abortControllersRef.current.add(controller);
-    setError("");
-
-    const cachedRepos = resources.has("repos") ? peek<ReposData>(CACHE_KEY.repos) : null;
-    if (cachedRepos) {
-      setRepos(cachedRepos.repos);
-      setOwners(cachedRepos.owners);
-      setFetchedAt(cachedRepos.fetchedAt);
-    }
-    const cachedIssues = resources.has("issues") ? peek<IssuesData>(CACHE_KEY.issues) : null;
-    if (cachedIssues) setIssues(cachedIssues.issues);
-    const cachedPrs = resources.has("prs") ? peek<PullRequestsData>(CACHE_KEY.prs) : null;
-    if (cachedPrs) setPullRequests(cachedPrs.pullRequests);
-
-    // Local persisted data costs no provider requests and keeps previously visited
-    // tabs warm after a browser refresh.
-    if (!cachedRepos && !cachedIssues && !cachedPrs) {
-      const persisted = readStatsCache();
-      if (persisted) {
-        setRepos(persisted.repos as GhRepo[]);
-        setOwners(persisted.owners);
-        setIssues(persisted.issues as GhIssue[]);
-        setPullRequests(persisted.pullRequests as GhPullRequest[]);
-        if (persisted.fetchedAt) setFetchedAt(persisted.fetchedAt);
-      }
-    }
-
-    let pending = resources.size;
-    if (!pending) {
-      abortControllersRef.current.delete(controller);
-      return;
-    }
-    activeLoadsRef.current += 1;
-    setLoading(true);
-    setDataStale(true);
-    const finish = () => {
-      pending -= 1;
-      if (pending > 0 || !abortControllersRef.current.has(controller)) return;
-      abortControllersRef.current.delete(controller);
-      activeLoadsRef.current = Math.max(0, activeLoadsRef.current - 1);
-      if (activeLoadsRef.current === 0) {
-        setLoading(false);
-        setDataStale(false);
-      }
-    };
-    const handleFailure = (err: unknown) => {
-      if (controller.signal.aborted) return;
-      if (err instanceof AuthRequiredClientError) {
-        setAuthState("anonymous");
-        setAuthLogin(null);
-        return;
-      }
-      if ((err as Error).name === "AbortError") return;
-      setError((err as Error).message);
-    };
-
-    if (resources.has("repos")) {
-      void swr<ReposData>(CACHE_KEY.repos, (signal) => fetchRepos(fresh, signal), {
-        fresh,
-        signal: controller.signal,
-      }).promise.then((data) => {
-        if (controller.signal.aborted) return;
-        setRepos(data.repos);
-        setOwners(data.owners);
-        setFetchedAt(data.fetchedAt);
-      }, handleFailure).finally(finish);
-    }
-
-    if (resources.has("issues")) {
-      void swr<IssuesData>(CACHE_KEY.issues, (signal) => fetchIssues(fresh, signal), {
-        fresh,
-        signal: controller.signal,
-      }).promise.then((data) => {
-        if (!controller.signal.aborted) setIssues(data.issues);
-      }, handleFailure).finally(finish);
-    }
-
-    if (resources.has("prs")) {
-      void swr<PullRequestsData>(CACHE_KEY.prs, (signal) => fetchPullRequests(fresh, signal), {
-        fresh,
-        signal: controller.signal,
-      }).promise.then((data) => {
-        if (!controller.signal.aborted) setPullRequests(data.pullRequests);
-      }, handleFailure).finally(finish);
-    }
+  const handleBaseAuthRequired = useCallback(() => {
+    setAuthState("anonymous");
+    setAuthLogin(null);
   }, []);
+  const handleBaseAccountChange = useCallback(() => {
+    setRepoInsights([]);
+    setDailyDigests([]);
+    setCiHealth([]);
+    setBoardCount(0);
+    setNotifications([]);
+  }, []);
+  const {
+    issues,
+    pullRequests,
+    repos,
+    owners,
+    fetchedAt,
+    loading,
+    dataStale,
+    error,
+    loadData,
+    loadAll,
+    resetData,
+  } = useDashboardData({
+    authenticated: authState === "authenticated",
+    accountsLoading,
+    accountKey: activeAccountId ?? authLogin,
+    tab,
+    routeRepoName,
+    repositoryDetail: repoDetailTab,
+    onAuthRequired: handleBaseAuthRequired,
+    onAccountChange: handleBaseAccountChange,
+  });
 
   useEffect(() => {
     void fetchAuthStatus()
@@ -333,56 +259,9 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (authState !== "authenticated") {
-      loadedAccountRef.current = null;
-      return;
-    }
-    if (accountsLoading) return;
-
-    const accountKey = activeAccountId ?? authLogin ?? "authenticated";
-    const accountChanged = loadedAccountRef.current !== null && loadedAccountRef.current !== accountKey;
-    if (accountChanged) {
-      for (const controller of abortControllersRef.current) controller.abort();
-      abortControllersRef.current.clear();
-      activeLoadsRef.current = 0;
-      setLoading(false);
-      setDataStale(false);
-      setIssues([]);
-      setPullRequests([]);
-      setRepos([]);
-      setOwners([]);
-      setRepoInsights([]);
-      setDailyDigests([]);
-      setCiHealth([]);
-      setNotifications([]);
-      setFetchedAt("");
-      clearStatsCache();
-    }
-    loadedAccountRef.current = accountKey;
-    loadData(dataRequirementsForTab(tab, Boolean(routeRepoName), repoDetailTab), accountChanged);
-  }, [authState, accountsLoading, activeAccountId, authLogin, tab, routeRepoName, repoDetailTab, loadData]);
-
-  useEffect(() => {
     if (authState !== "authenticated" || !paletteOpen) return;
-    loadData(allDashboardResources());
-  }, [authState, paletteOpen, loadData]);
-
-  useEffect(() => () => {
-    for (const controller of abortControllersRef.current) controller.abort();
-    abortControllersRef.current.clear();
-  }, []);
-
-  // Persist dashboard data to localStorage for instant display on next page load
-  useEffect(() => {
-    if (repos.length === 0 && issues.length === 0 && pullRequests.length === 0) return;
-    writeStatsCache({
-      repos,
-      owners,
-      issues,
-      pullRequests,
-      fetchedAt,
-    });
-  }, [repos, owners, issues, pullRequests, fetchedAt]);
+    loadAll();
+  }, [authState, paletteOpen, loadAll]);
 
   useEffect(() => {
     if (authState !== "authenticated") return;
@@ -422,9 +301,7 @@ export function App() {
   }, [digestPeriod]);
 
   async function handleLogout() {
-    for (const controller of abortControllersRef.current) controller.abort();
-    abortControllersRef.current.clear();
-    activeLoadsRef.current = 0;
+    resetData();
     try {
       await logoutAuth();
     } catch {
@@ -435,14 +312,10 @@ export function App() {
     clearFiltersCache();
     setAuthState("anonymous");
     setAuthLogin(null);
-    setIssues([]);
-    setPullRequests([]);
-    setRepos([]);
-    setOwners([]);
     setRepoInsights([]);
     setDailyDigests([]);
     setCiHealth([]);
-    setFetchedAt("");
+    setBoardCount(0);
   }
 
   useEffect(() => {
@@ -789,7 +662,7 @@ export function App() {
     { key: "ci" as const, label: t("tabs.ci"), count: ciHealth.length, icon: <PulseIcon /> },
     { key: "digests" as const, label: t("tabs.digest"), count: dailyDigests.length, icon: <PulseIcon /> },
     ...(projectsEnabled
-      ? [{ key: "kanban" as const, label: t("tabs.board"), count: "—", icon: <BoardIcon /> }]
+      ? [{ key: "kanban" as const, label: t("tabs.board"), count: boardCount, icon: <BoardIcon /> }]
       : []),
   ];
 
@@ -1042,7 +915,7 @@ export function App() {
             </div>
           ) : null}
 
-          {tab === "kanban" && projectsEnabled ? <KanbanView /> : null}
+          {tab === "kanban" && projectsEnabled ? <KanbanView onCountChange={setBoardCount} /> : null}
         </main>
       </div>
       <Footer
@@ -1056,7 +929,7 @@ export function App() {
           pullRequests={pullRequests}
           onNavigateTab={(next) => navigateTab(next)}
           onOpenRepo={(repo) => openRepoModal(repo)}
-          onRefresh={() => loadData(allDashboardResources(), true)}
+          onRefresh={() => loadAll(true)}
           onToggleTheme={cycleTheme}
           onClose={() => setPaletteOpen(false)}
         />

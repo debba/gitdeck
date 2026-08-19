@@ -48,6 +48,7 @@ import {
 import { fetchRepoSecuritySummary } from "./server/securityAlerts";
 import { handleRepoInsights } from "./server/repoInsights";
 import { getCIHealthCached, invalidateCIHealthCache } from "./server/ciHealth";
+import { getProviderMetrics } from "./server/providerDiagnostics";
 
 const STARGAZERS_QUERY = `
 query($owner:String!, $name:String!, $cursor:String, $direction:OrderDirection!) {
@@ -1259,6 +1260,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   if (url.startsWith("/api/accounts/activate")) return handleAccountActivate(req, res);
   if (url.startsWith("/api/accounts/add-token")) return handleAccountAddToken(req, res);
   if (url.startsWith("/api/provider-configs")) return handleProviderConfigsList(res);
+  if (url.startsWith("/api/diagnostics/provider-metrics")) return sendJson(res, 200, getProviderMetrics());
   if (url.startsWith("/api/accounts")) {
     if (req.method === "DELETE") {
       return handleAccountRemove(req, res, new URL(url, "http://localhost"));

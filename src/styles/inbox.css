@@ -12,41 +12,96 @@
   }
 
   /* Sidebar mailbox list (rendered inside SidebarControls when tab=inbox) */
+  .sidebar.inbox-sidebar {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
+  }
+  .inbox-side-head {
+    flex: 0 0 auto;
+    min-height: 48px;
+    padding: 12px 14px 8px;
+  }
+  .mailbox-total {
+    min-width: 34px;
+    padding: 2px 8px;
+    border: 1px solid var(--border-soft);
+    border-radius: 999px;
+    background: var(--panel-2);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.35;
+    text-align: center;
+  }
+  .inbox-sidebar .search-wrap {
+    flex: 0 0 auto;
+    padding: 4px 12px 10px;
+  }
+  .inbox-sidebar .search-input {
+    min-height: 40px;
+    padding-inline: 11px;
+  }
   .mailbox-list {
     display: grid;
-    gap: 2px;
-    padding: 0 8px;
+    align-content: start;
+    gap: 3px;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 1px 10px 10px;
+    scrollbar-gutter: stable;
   }
   .mailbox-item {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    width: 100%; min-height: 32px;
-    border: 0; border-radius: 7px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    width: 100%; min-height: 36px;
+    border: 1px solid transparent; border-radius: 8px;
     background: transparent; color: var(--muted);
-    cursor: pointer; padding: 6px 9px; text-align: left;
+    cursor: pointer; padding: 7px 9px; text-align: left;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
   }
-  .mailbox-item:hover { background: var(--hover-surface); color: var(--text); }
+  .mailbox-item:hover {
+    border-color: var(--border-soft);
+    background: var(--hover-surface);
+    color: var(--text);
+  }
+  .mailbox-item:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: var(--ring);
+  }
   .mailbox-item.active {
+    border-color: color-mix(in srgb, var(--accent) 22%, transparent);
     background: var(--accent-faint); color: var(--text);
-    box-shadow: inset 2px 0 0 var(--accent);
+    box-shadow: inset 3px 0 0 var(--accent);
   }
   .mailbox-item span {
+    flex: 1;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-size: 13px; font-weight: 600;
   }
+  .mailbox-item.active span { font-weight: 700; }
   .mailbox-item strong {
-    min-width: 26px; padding: 1px 7px; border-radius: 999px;
+    flex: 0 0 auto;
+    min-width: 28px; padding: 2px 7px; border-radius: 999px;
     background: var(--panel-2); color: var(--muted);
-    font-size: 11px; font-variant-numeric: tabular-nums; text-align: center;
+    font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+    line-height: 1.2; text-align: center;
   }
+  .mailbox-item.empty strong { color: var(--muted-2); font-weight: 600; }
   .mailbox-item.active strong { background: var(--accent-soft); color: var(--accent); }
   .mailbox-action {
-    margin: 14px 12px 8px;
-    border: 1px solid var(--border-soft); border-radius: 7px;
-    background: var(--panel); color: var(--text);
-    cursor: pointer; padding: 8px 10px;
+    flex: 0 0 auto;
+    margin: 8px 12px 12px;
+    border: 1px solid var(--border-soft); border-radius: 8px;
+    background: var(--panel-2); color: var(--text);
+    cursor: pointer; padding: 9px 10px;
     font-size: 12.5px; font-weight: 600;
+    transition: border-color .15s ease, background-color .15s ease, color .15s ease;
   }
-  .mailbox-action:hover { border-color: var(--accent); color: var(--accent); }
+  .mailbox-action:hover { border-color: var(--accent); background: var(--accent-faint); color: var(--accent); }
+  .mailbox-action:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
 
   .inbox-list-pagination {
     border-top: 1px solid var(--border-soft);

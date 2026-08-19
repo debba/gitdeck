@@ -9,9 +9,12 @@ const store = new Map<string, CacheEntry<unknown>>();
 const inflight = new Map<string, Promise<unknown>>();
 const etagStore = new Map<string, string>();
 
+export type SwrSource = "cache" | "inflight" | "network";
+
 export interface SwrResult<T> {
   cached: T | null;
   fresh: boolean;
+  source: SwrSource;
   promise: Promise<T>;
 }
 
@@ -62,21 +65,22 @@ export function swr<T>(
   const cached = peek<T>(key);
 
   if (!fresh && cached !== null && isFresh(key)) {
-    return { cached, fresh: true, promise: Promise.resolve(cached) };
+    return { cached, fresh: true, source: "cache", promise: Promise.resolve(cached) };
   }
 
   if (!fresh) {
     const existing = inflight.get(key) as Promise<T> | undefined;
-    if (existing) return { cached, fresh: false, promise: existing };
+    if (existing) return { cached, fresh: false, source: "inflight", promise: existing };
   }
 
   const promise = runFetch();
   if (!fresh) inflight.set(key, promise);
-  return { cached, fresh: false, promise };
+  return { cached, fresh: false, source: "network", promise };
 
   async function runFetch(): Promise<T> {
     try {
       const value = await fetcher(signal);
+      if (signal?.aborted) throw new DOMException("The operation was aborted", "AbortError");
       set(key, value, ttlMs);
       return value;
     } finally {

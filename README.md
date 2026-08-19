@@ -129,6 +129,7 @@ The server reads its configuration from environment variables:
 | `PORT`                 | no       | `8765`                                         | Port the server listens on                       |
 | `OPENAI_API_KEY`       | no       | —                                              | Enables AI-generated daily digest narratives     |
 | `OPENAI_DIGEST_MODEL`  | no       | `gpt-4.1-mini`                                 | Model used for digest narratives                 |
+| `GITDECK_DIAGNOSTICS`  | no       | —                                              | Set to `1` to log provider call durations        |
 
 ### Authentication modes
 
@@ -237,6 +238,16 @@ npm run typecheck # tsc --noEmit
 ```
 
 Tests live under `tests/` and mirror the structure of `src/` (see [AGENTS.md](AGENTS.md)).
+
+### Load diagnostics
+
+Base dashboard loads retain the latest 50 measurements in memory, including time to first content, total duration, cache hits, deduplicated requests, and network requests. In the browser console, enable per-load logging with:
+
+```js
+localStorage.setItem("gh-dash.diagnostics", "1")
+```
+
+Provider-side call counts and timings are available from `GET /api/diagnostics/provider-metrics`. Set `GITDECK_DIAGNOSTICS=1` to also log every measured provider operation on the server.
 
 ## Project layout
 

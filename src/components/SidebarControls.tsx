@@ -190,10 +190,10 @@ export function SidebarControls({
 
   if (inboxMode && inbox) {
     return (
-      <aside className="sidebar" id="sidebar">
-        <div className="side-head">
+      <aside className="sidebar inbox-sidebar" id="sidebar">
+        <div className="side-head inbox-side-head">
           <h2>{t("sidebar.mailboxes")}</h2>
-          <span className="reset" style={{ pointerEvents: "none" }}>{formatNumber(inbox.totalCount)}</span>
+          <span className="mailbox-total" aria-label={`${t("sidebar.mailboxes")}: ${formatNumber(inbox.totalCount)}`}>{formatNumber(inbox.totalCount)}</span>
           <button className="side-close" aria-label={t("common.closeFilters")} onClick={onClose}><CloseIcon /></button>
         </div>
         <div className="search-wrap">
@@ -208,9 +208,10 @@ export function SidebarControls({
             const active = inbox.mailbox === entry.key;
             return (
               <button
-                className={`mailbox-item ${active ? "active" : ""}`}
+                className={`mailbox-item${active ? " active" : ""}${count === 0 ? " empty" : ""}`}
                 key={entry.key}
                 type="button"
+                aria-pressed={active}
                 onClick={() => inbox.onMailboxChange(entry.key)}
               >
                 <span>{t(`mailbox.${entry.key}`)}</span>
