@@ -19,7 +19,11 @@ function statusValueOf(item: ProjectItem, fieldId: string) {
   return (item.fieldValues?.nodes || []).find((value) => value.__typename === "ProjectV2ItemFieldSingleSelectValue" && value.field?.id === fieldId);
 }
 
-export function KanbanView() {
+interface KanbanViewProps {
+  onCountChange?: (count: number) => void;
+}
+
+export function KanbanView({ onCountChange }: KanbanViewProps) {
   const boardRef = useRef<HTMLDivElement>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [project, setProject] = useState<ProjectDetails | null>(null);
@@ -57,6 +61,10 @@ export function KanbanView() {
   useEffect(() => {
     void loadProjects();
   }, []);
+
+  useEffect(() => {
+    onCountChange?.(projects.length);
+  }, [onCountChange, projects.length]);
 
   useEffect(() => {
     document.body.classList.toggle("board-focus", boardFullscreen);
