@@ -179,7 +179,7 @@
   transform: translateX(2px);
 }
 
-.auth-provider-badge {
+.provider-logo {
   width: 36px;
   height: 36px;
   border-radius: 10px;
@@ -190,23 +190,53 @@
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
-.auth-provider-badge-sm {
+.provider-logo svg {
+  width: 20px;
+  height: 20px;
+}
+
+.provider-logo-small {
   width: 28px;
   height: 28px;
   border-radius: 8px;
 }
 
-.auth-provider-badge-sm svg {
+.provider-logo-small svg {
   width: 16px;
   height: 16px;
 }
 
-.auth-provider-badge-github {
+.provider-logo-github {
   background: linear-gradient(155deg, #2b333e, #0d1117);
 }
 
-.auth-provider-badge-forgejo {
+.provider-logo-gitlab {
+  background: linear-gradient(155deg, #35243f, #171321);
+}
+
+.provider-logo-forgejo {
   background: linear-gradient(155deg, #ff8e3c, #ed591b);
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--border-soft);
+}
+
+.auth-divider span {
+  flex: 0 0 auto;
 }
 
 .auth-provider-header {

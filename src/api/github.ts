@@ -102,12 +102,12 @@ export function logoutAuth(): Promise<{ ok: true }> {
 
 export interface AccountSummary {
   id: string;
-  providerKind: "github" | "forgejo";
+  providerKind: "github" | "forgejo" | "gitlab";
   providerConfigId: string;
   label: string;
   login: string | null;
   scope: string;
-  source: "device" | "gh-cli" | "token" | "env";
+  source: "device" | "oauth" | "gh-cli" | "token" | "env";
   ephemeral: boolean;
   active: boolean;
   capabilities: {
@@ -147,17 +147,20 @@ export function removeAccount(id: string): Promise<{ ok: true }> {
 
 export interface ProviderConfigSummary {
   id: string;
-  kind: "github" | "forgejo";
+  kind: "github" | "forgejo" | "gitlab";
   label: string;
   webUrl: string;
+  tokenSettingsUrl: string;
   supportsDeviceFlow: boolean;
+  supportsOAuth: boolean;
+  oauthInstanceUrl: string | null;
 }
 
 export function fetchProviderConfigs(): Promise<{ ok: true; configs: ProviderConfigSummary[] }> {
   return readJson<{ ok: true; configs: ProviderConfigSummary[] }>("/api/provider-configs");
 }
 
-export function addTokenAccount(payload: { providerConfigId: string; token: string; label?: string }): Promise<{ ok: true; accountId: string }> {
+export function addTokenAccount(payload: { providerConfigId?: string; instanceUrl?: string; token: string; label?: string }): Promise<{ ok: true; accountId: string }> {
   return readJson("/api/accounts/add-token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

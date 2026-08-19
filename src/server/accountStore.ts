@@ -38,6 +38,17 @@ const DEFAULT_PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     oauthScopes: "read:repository read:notification read:user",
     userAgent: "gitdeck",
   },
+  "gitlab.com": {
+    id: "gitlab.com",
+    kind: "gitlab",
+    label: "GitLab",
+    baseUrl: "https://gitlab.com/api/v4",
+    webUrl: "https://gitlab.com",
+    oauthAuthorizeUrl: "https://gitlab.com/oauth/authorize",
+    oauthTokenUrl: "https://gitlab.com/oauth/token",
+    oauthScopes: "api read_user read_repository",
+    userAgent: "gitdeck",
+  },
 };
 
 interface InternalState {
