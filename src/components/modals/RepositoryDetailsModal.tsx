@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   addRepoAlias,
   fetchDependents,
@@ -16,10 +16,12 @@ import { issueCountForRepo } from "../../utils/dashboard";
 import { getLanguageColor } from "../../utils/colors";
 import { buildDailyRepoDigestMarkdown } from "../../utils/digests";
 import { isValidRepoName } from "../../utils/aliasQuery";
-import { formatBytes, formatNumber, formatRelativeTime } from "../../utils/format";
+import { formatBytes, formatNumber, formatReadableDate, formatRelativeTime } from "../../utils/format";
+import { MAX_PINNED_REPOSITORY_TABS, normalizePinnedRepositoryTabs } from "../../utils/repository";
+import type { RepositoryDetailTab } from "../../utils/repository";
 import { clampPage } from "../../utils/pagination";
 import { Pagination } from "../common/Pagination";
-import { CloseIcon, ForkIcon, IssueIcon, RefreshIcon, StarIcon } from "../common/Icons";
+import { CloseIcon, ForkIcon, IssueIcon, PinIcon, RefreshIcon, StarIcon } from "../common/Icons";
 
 interface RepositoryDetailsModalProps {
   repo: GhRepo;
@@ -31,16 +33,26 @@ interface RepositoryDetailsModalProps {
   onIssuesClick: (repo: string) => void;
 }
 
-export type DetailTab = "overview" | "actions" | "commits" | "pull-requests" | "issues" | "milestones" | "releases" | "branches" | "forks" | "traffic" | "mentions" | "discussions" | "dependents";
+export type DetailTab = RepositoryDetailTab;
 
 type ReleaseFilter = "all" | "stable" | "prerelease" | "draft";
 
 const MODAL_PAGE_SIZE = 10;
+const PINNED_TABS_STORAGE_KEY = "gitdeck.repositoryDetail.pinnedTabs";
 
 function historyDelta(repo: GhRepo, field: "stars" | "forks") {
   const history = repo.history || [];
   if (history.length < 2) return null;
   return history[history.length - 1][field] - history[0][field];
+}
+
+function loadPinnedDetailTabs(): DetailTab[] {
+  if (typeof window === "undefined") return normalizePinnedRepositoryTabs(null);
+  try {
+    return normalizePinnedRepositoryTabs(JSON.parse(window.localStorage.getItem(PINNED_TABS_STORAGE_KEY) ?? "null"));
+  } catch {
+    return normalizePinnedRepositoryTabs(null);
+  }
 }
 
 function formatReleaseDate(iso: string | null | undefined) {
@@ -152,6 +164,37 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
   const [aliasError, setAliasError] = useState("");
   const [aliasBusy, setAliasBusy] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [cloneCopied, setCloneCopied] = useState(false);
+  const [digestCopied, setDigestCopied] = useState(false);
+  const [pinnedDetailTabs, setPinnedDetailTabs] = useState<DetailTab[]>(loadPinnedDetailTabs);
+  const moreTabsRef = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PINNED_TABS_STORAGE_KEY, JSON.stringify(pinnedDetailTabs));
+    } catch {
+      // Preferences remain available for the current session when storage is blocked.
+    }
+  }, [pinnedDetailTabs]);
+
+  useEffect(() => {
+    function closeMoreTabs(event: PointerEvent | KeyboardEvent) {
+      const menu = moreTabsRef.current;
+      if (!menu?.open) return;
+      if (event.type === "keydown" && (event as KeyboardEvent).key === "Escape") {
+        menu.removeAttribute("open");
+        return;
+      }
+      if (event.type === "pointerdown" && !menu.contains(event.target as Node)) menu.removeAttribute("open");
+    }
+
+    document.addEventListener("pointerdown", closeMoreTabs);
+    document.addEventListener("keydown", closeMoreTabs);
+    return () => {
+      document.removeEventListener("pointerdown", closeMoreTabs);
+      document.removeEventListener("keydown", closeMoreTabs);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -286,9 +329,26 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
     );
   }
 
+  function togglePinnedDetailTab(tab: DetailTab) {
+    setPinnedDetailTabs((current) => {
+      if (current.includes(tab)) return current.filter((item) => item !== tab);
+      if (current.length >= MAX_PINNED_REPOSITORY_TABS) return current;
+      return [...current, tab];
+    });
+  }
+
   async function copyRepoDigest() {
     if (!details?.digest) return;
     await navigator.clipboard.writeText(buildDailyRepoDigestMarkdown(details.digest));
+    setDigestCopied(true);
+    window.setTimeout(() => setDigestCopied(false), 1600);
+  }
+
+  async function copyCloneUrl() {
+    const cloneUrl = details?.meta?.clone_url || `${repo.url.replace(/\/$/, "")}.git`;
+    await navigator.clipboard.writeText(cloneUrl);
+    setCloneCopied(true);
+    window.setTimeout(() => setCloneCopied(false), 1600);
   }
 
   async function submitAlias() {
@@ -343,6 +403,12 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
   const releases = details?.releases ?? [];
   const workflows = details?.workflows ?? [];
   const security = details?.security ?? null;
+  const latestRelease = releases.find((release) => !release.draft && !release.prerelease) ?? releases.find((release) => !release.draft) ?? null;
+  const latestWorkflow = workflows[0] ?? null;
+  const ciStatus = latestWorkflow?.conclusion ?? latestWorkflow?.status ?? null;
+  const isTemplate = repo.isTemplate || details?.meta?.is_template;
+  const isReadOnly = ["READ", "TRIAGE"].includes(repo.viewerPermission ?? "") || details?.meta?.permissions?.push === false;
+  const homepage = details?.meta?.homepage?.trim() || null;
   const totalReleaseDownloads = releases.reduce((sum, release) => sum + release.totalDownloads, 0);
   const stableReleases = releases.filter((release) => !release.prerelease && !release.draft);
   const preReleases = releases.filter((release) => release.prerelease && !release.draft);
@@ -417,6 +483,29 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
     { key: "discussions" as const, label: "Discussions", count: discussionsTotal || detailCounts?.discussions || 0 },
     { key: "dependents" as const, label: "Dependents", count: dependents.length },
   ];
+  const primaryDetailTabs = pinnedDetailTabs
+    .map((key) => detailTabs.find((item) => item.key === key))
+    .filter((item): item is (typeof detailTabs)[number] => Boolean(item));
+  const moreDetailTabs = detailTabs.filter((item) => !pinnedDetailTabs.includes(item.key));
+  const activeMoreTab = moreDetailTabs.find((item) => item.key === activeTab);
+
+  function renderDetailTab(item: (typeof detailTabs)[number], onSelect?: () => void) {
+    return (
+      <button
+        type="button"
+        key={item.key}
+        className={`repo-detail-tab ${activeTab === item.key ? "active" : ""}`}
+        aria-current={activeTab === item.key ? "page" : undefined}
+        onClick={() => {
+          onTabChange(item.key);
+          onSelect?.();
+        }}
+      >
+        <span>{item.label}</span>
+        <strong>{loading && item.key !== "overview" && item.count === 0 ? "..." : formatNumber(item.count)}</strong>
+      </button>
+    );
+  }
 
   return (
     <div className="modal-root">
@@ -431,6 +520,9 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
             </div>
           </div>
           <div className="modal-head-actions">
+            <a className="repo-open-external" href={repo.url} target="_blank" rel="noreferrer">
+              {repo.url.includes("github.com") ? "Open on GitHub" : "Open repository"} ↗
+            </a>
             <button
               className={`modal-close modal-refresh ${loading ? "refreshing" : ""}`}
               aria-label="Reload repository data"
@@ -449,12 +541,18 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
               <a className="repo-detail-title" href={repo.url} target="_blank" rel="noreferrer">{repo.nameWithOwner}</a>
               <div className="repo-badges">
                 {repo.isPrivate ? <span className="rb private">Private</span> : <span className="rb">Public</span>}
-                {repo.isArchived ? <span className="rb archived">Archived</span> : null}
+                {repo.isArchived || details?.meta?.archived ? <span className="rb archived">Archived</span> : null}
                 {repo.isFork ? <span className="rb fork">Fork</span> : null}
+                {isTemplate ? <span className="rb template">Template</span> : null}
+                {isReadOnly ? <span className="rb readonly">Read-only</span> : null}
               </div>
             </div>
             <p>{description}</p>
             {topics.length ? <div className="repo-detail-topics">{topics.slice(0, 8).map((topic) => <span key={topic}>{topic}</span>)}</div> : null}
+            <div className="repo-quick-actions" aria-label="Repository links">
+              {homepage ? <a href={homepage} target="_blank" rel="noreferrer">Documentation ↗</a> : null}
+              <button type="button" onClick={() => void copyCloneUrl()}>{cloneCopied ? "Clone URL copied" : "Copy clone URL"}</button>
+            </div>
           </section>
 
           <section className="repo-detail-stats" aria-label="Repository stats">
@@ -473,37 +571,65 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
             <div><div className="repo-detail-label">Last update</div><div className="repo-detail-value" title={new Date(repo.updatedAt).toLocaleString()}>{formatRelativeTime(repo.updatedAt)}</div></div>
             {details?.meta?.license?.name ? <div><div className="repo-detail-label">License</div><div className="repo-detail-value">{details.meta.license.name}</div></div> : null}
             {details?.meta?.default_branch ? <div><div className="repo-detail-label">Default branch</div><div className="repo-detail-value">{details.meta.default_branch}</div></div> : null}
+            {latestRelease ? <div><div className="repo-detail-label">Latest release</div><a className="repo-detail-value repo-detail-meta-link" href={latestRelease.html_url} target="_blank" rel="noreferrer" title={latestRelease.name || latestRelease.tag_name}>{latestRelease.tag_name}</a></div> : null}
+            {latestWorkflow && ciStatus ? <div><div className="repo-detail-label">CI status</div><a className={`repo-detail-value repo-detail-meta-link ci-meta-${ciStatus}`} href={latestWorkflow.html_url} target="_blank" rel="noreferrer" title={`${latestWorkflow.name || "Workflow"}: ${ciStatus}`}>{ciStatus.replaceAll("_", " ")}</a></div> : null}
           </section>
 
           <nav className="repo-detail-tabs" aria-label="Repository detail sections">
-            {detailTabs.map((item) => (
-              <button
-                type="button"
-                key={item.key}
-                className={`repo-detail-tab ${activeTab === item.key ? "active" : ""}`}
-                aria-current={activeTab === item.key ? "page" : undefined}
-                onClick={() => onTabChange(item.key)}
-              >
-                <span>{item.label}</span>
-                <strong>{loading && item.key !== "overview" && item.count === 0 ? "..." : formatNumber(item.count)}</strong>
-              </button>
-            ))}
+            <div className="repo-detail-primary-tabs">
+              {primaryDetailTabs.map((item) => renderDetailTab(item))}
+            </div>
+            <details ref={moreTabsRef} className={`repo-detail-more ${activeMoreTab ? "active" : ""}`}>
+              <summary className="repo-detail-tab" aria-label="More repository sections">
+                <span>{activeMoreTab?.label ?? "More"}</span>
+                {activeMoreTab ? <strong>{formatNumber(activeMoreTab.count)}</strong> : <span className="repo-detail-more-chevron">⌄</span>}
+              </summary>
+              <div className="repo-detail-more-menu">
+                <div className="repo-detail-more-head">
+                  <span>Customize toolbar</span>
+                  <strong>{pinnedDetailTabs.length}/{MAX_PINNED_REPOSITORY_TABS} pinned</strong>
+                </div>
+                {detailTabs.map((item) => {
+                  const pinned = pinnedDetailTabs.includes(item.key);
+                  const pinLimitReached = !pinned && pinnedDetailTabs.length >= MAX_PINNED_REPOSITORY_TABS;
+                  return (
+                    <div className="repo-detail-more-item" key={item.key}>
+                      {renderDetailTab(item, () => moreTabsRef.current?.removeAttribute("open"))}
+                      <button
+                        type="button"
+                        className={`repo-detail-pin ${pinned ? "active" : ""}`}
+                        aria-label={`${pinned ? "Unpin" : "Pin"} ${item.label}`}
+                        aria-pressed={pinned}
+                        title={pinLimitReached ? `You can pin up to ${MAX_PINNED_REPOSITORY_TABS} sections` : `${pinned ? "Unpin from" : "Pin to"} toolbar`}
+                        disabled={pinLimitReached}
+                        onClick={() => togglePinnedDetailTab(item.key)}
+                      >
+                        <PinIcon filled={pinned} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
           </nav>
 
           {activeTab === "overview" && repoDigest ? (
             <section>
               <div className="modal-section-title section-title-with-count">
                 <span>Daily repo digest</span>
-                <strong>{repoDigest.date}</strong>
+                <strong title={repoDigest.date}>{formatReadableDate(repoDigest.date)}</strong>
               </div>
               <div className="repo-detail-digest">
                 <div className="repo-detail-digest-head">
-                  <div className="repo-detail-digest-badges">
-                    <span>★ {repoDigest.starsDelta >= 0 ? "+" : ""}{formatNumber(repoDigest.starsDelta)}</span>
-                    <span>forks {repoDigest.forksDelta >= 0 ? "+" : ""}{formatNumber(repoDigest.forksDelta)}</span>
-                    <span>issues {repoDigest.issueDelta >= 0 ? "+" : ""}{formatNumber(repoDigest.issueDelta)}</span>
+                  <div>
+                    <div className="digest-comparison-label">Changes vs previous day</div>
+                    <div className="repo-detail-digest-badges">
+                      <span>★ {repoDigest.starsDelta >= 0 ? "+" : ""}{formatNumber(repoDigest.starsDelta)}</span>
+                      <span>forks {repoDigest.forksDelta >= 0 ? "+" : ""}{formatNumber(repoDigest.forksDelta)}</span>
+                      <span>issues {repoDigest.issueDelta >= 0 ? "+" : ""}{formatNumber(repoDigest.issueDelta)}</span>
+                    </div>
                   </div>
-                  <button type="button" className="digest-copy-btn" onClick={() => void copyRepoDigest()}>Copy Markdown</button>
+                  <button type="button" className={`digest-copy-btn ${digestCopied ? "copied" : ""}`} onClick={() => void copyRepoDigest()} aria-live="polite">{digestCopied ? "Copied!" : "Copy Markdown"}</button>
                 </div>
                 {repoDigest.ai ? (
                   <div className="digest-ai-block">
@@ -517,9 +643,9 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                   </div>
                 ) : null}
                 <div className="digest-pill-groups">
-                  <div className="digest-pill-group">
+                  <div className="digest-pill-group digest-executive-summary">
                     <h4>Executive Summary</h4>
-                    {repoDigest.executiveSummary.map((item) => <span key={item}>{item}</span>)}
+                    <p>{repoDigest.executiveSummary.join(" ")}</p>
                   </div>
                   {repoDigest.momentum.length ? (
                     <div className="digest-pill-group positive">
@@ -530,7 +656,9 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                   {repoDigest.risks.length ? (
                     <div className="digest-pill-group risk">
                       <h4>Risks</h4>
-                      {repoDigest.risks.map((item) => <span key={item}>{item}</span>)}
+                      {repoDigest.risks.map((item) => /issues/i.test(item)
+                        ? <button type="button" key={item} onClick={() => onIssuesClick(repo.nameWithOwner)} title="Open issues in dashboard">{item} ↗</button>
+                        : <span key={item}>{item}</span>)}
                     </div>
                   ) : null}
                 </div>
@@ -552,7 +680,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                   <a href={person.html_url || person.url} target="_blank" rel="noreferrer" key={`${name}-${index}`}>
                     {person.avatar_url || person.avatarUrl ? <img src={person.avatar_url || person.avatarUrl} alt="" /> : <span className="repo-detail-avatar-fallback">{name.slice(0, 1).toUpperCase()}</span>}
                     <span>{name}</span>
-                    <em>{formatNumber(person.contributions)}</em>
+                    <em title={`${person.contributions.toLocaleString()} commits contributed`} aria-label={`${person.contributions.toLocaleString()} commits contributed`}>{formatNumber(person.contributions)} commits</em>
                   </a>
                   );
                 })}

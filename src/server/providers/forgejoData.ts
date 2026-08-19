@@ -43,6 +43,8 @@ interface ForgejoRepo {
   archived?: boolean;
   fork?: boolean;
   internal?: boolean;
+  template?: boolean;
+  permissions?: { push?: boolean };
 }
 
 interface ForgejoLabel {
@@ -193,6 +195,8 @@ function normalizeRepo(raw: ForgejoRepo): GhRepo {
     isPrivate: Boolean(raw.private),
     isArchived: Boolean(raw.archived),
     isFork: Boolean(raw.fork),
+    isTemplate: Boolean(raw.template),
+    viewerPermission: raw.permissions?.push === false ? "READ" : null,
     url: raw.html_url,
   };
 }

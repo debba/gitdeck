@@ -102,6 +102,8 @@ export interface GhRepo {
   isPrivate: boolean;
   isArchived: boolean;
   isFork: boolean;
+  isTemplate?: boolean;
+  viewerPermission?: string | null;
   url: string;
   history?: SnapshotEntry[];
 }
@@ -289,9 +291,13 @@ export interface RepoDetailsData {
   meta: {
     description?: string | null;
     homepage?: string | null;
+    clone_url?: string | null;
     topics?: string[];
     license?: { name: string } | null;
     default_branch?: string;
+    archived?: boolean;
+    is_template?: boolean;
+    permissions?: { push?: boolean };
   } | null;
   languages: Record<string, number>;
   contributors: RepoContributor[];

@@ -86,6 +86,18 @@ export function formatExactNumber(value: number): string {
   return new Intl.NumberFormat("en-US").format(value);
 }
 
+export function formatReadableDate(iso: string, locale = "en-US"): string {
+  if (!iso) return "";
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(`${iso}T12:00:00Z`) : new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return new Intl.DateTimeFormat(locale, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
+
 export function formatBytes(value: number): string {
   if (!value) return "0 B";
   const units = ["B", "KB", "MB", "GB"];

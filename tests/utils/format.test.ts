@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatBytes, formatExactNumber, formatNumber, formatRelativeTime } from "../../src/utils/format";
+import { formatBytes, formatExactNumber, formatNumber, formatReadableDate, formatRelativeTime } from "../../src/utils/format";
 
 describe("format utilities", () => {
   it("formats relative time using the provided clock", () => {
@@ -38,6 +38,11 @@ describe("format utilities", () => {
   it("formats exact numbers", () => {
     expect(formatExactNumber(1_329)).toBe("1,329");
     expect(formatExactNumber(2_000_000)).toBe("2,000,000");
+  });
+
+  it("formats date-only values without timezone shifts", () => {
+    expect(formatReadableDate("2026-08-19")).toBe("Aug 19, 2026");
+    expect(formatReadableDate("not-a-date")).toBe("not-a-date");
   });
 
   it("formats byte values", () => {
