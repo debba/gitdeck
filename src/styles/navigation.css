@@ -79,6 +79,16 @@
     background: var(--panel-2);
     border-color: var(--button-hover-border);
   }
+  .account-switcher-btn .account-switcher-trigger-logo {
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    box-shadow: none;
+  }
+  .account-switcher-btn .account-switcher-trigger-logo svg {
+    width: 12px;
+    height: 12px;
+  }
   .account-switcher-popover {
     position: absolute;
     top: calc(100% + 8px);
@@ -95,10 +105,10 @@
     gap: 2px;
   }
   .account-switcher-item {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 2px;
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    align-items: center;
+    gap: 9px;
     padding: 7px 9px;
     border-radius: 6px;
     background: transparent;
@@ -113,6 +123,15 @@
   .account-switcher-item.active {
     background: color-mix(in srgb, var(--accent) 18%, var(--panel-2));
   }
+  .account-switcher-item-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .account-switcher-provider-logo {
+    box-shadow: none;
+  }
   .account-switcher-row {
     display: flex;
     align-items: center;
@@ -120,6 +139,10 @@
     gap: 8px;
   }
   .account-switcher-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-weight: 700;
   }
   .account-switcher-meta {
@@ -163,12 +186,15 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 80;
+    z-index: 1000;
     padding: 16px;
+    overflow-y: auto;
   }
   .add-account-card {
     width: min(420px, 100%);
+    max-height: calc(100dvh - 32px);
     padding: 20px;
+    overflow-y: auto;
     border: 1px solid var(--border-soft);
     border-radius: 10px;
     background: var(--panel);
@@ -209,9 +235,8 @@
   }
   .add-account-provider {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
+    align-items: center;
+    gap: 12px;
     padding: 10px 12px;
     border: 1px solid var(--border-soft);
     border-radius: 8px;
@@ -223,6 +248,13 @@
   }
   .add-account-provider:hover {
     border-color: var(--accent);
+  }
+  .add-account-provider-body {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
   }
   .add-account-provider-label {
     font-weight: 700;

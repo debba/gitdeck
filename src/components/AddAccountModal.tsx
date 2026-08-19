@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   addTokenAccount,
   fetchProviderConfigs,
@@ -9,13 +10,15 @@ import {
 } from "../api/github";
 import { useI18n } from "../i18n/I18nProvider";
 import { useAccounts } from "../contexts/AccountContext";
+import { ProviderLogo } from "./common/ProviderLogo";
+import { gitLabTokenSettingsUrl, isSameGitLabInstance } from "../utils/gitlab";
 
 interface AddAccountModalProps {
   open: boolean;
   onClose: () => void;
 }
 
-type Step = "choose" | "device" | "token" | "success";
+type Step = "choose" | "device" | "token" | "gitlab" | "success";
 type DevicePhase = "starting" | "awaiting" | "error";
 
 export function AddAccountModal({ open, onClose }: AddAccountModalProps) {
@@ -27,6 +30,7 @@ export function AddAccountModal({ open, onClose }: AddAccountModalProps) {
   const [flow, setFlow] = useState<DeviceFlowStart | null>(null);
   const [devicePhase, setDevicePhase] = useState<DevicePhase>("starting");
   const [token, setToken] = useState("");
+  const [instanceUrl, setInstanceUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -46,6 +50,7 @@ export function AddAccountModal({ open, onClose }: AddAccountModalProps) {
       setSelected(null);
       setFlow(null);
       setToken("");
+      setInstanceUrl("");
       setError("");
       setCopied(false);
       setSubmitting(false);
@@ -70,7 +75,10 @@ export function AddAccountModal({ open, onClose }: AddAccountModalProps) {
   async function pickProvider(config: ProviderConfigSummary) {
     setError("");
     setSelected(config);
-    if (config.supportsDeviceFlow) {
+    if (config.kind === "gitlab") {
+      setInstanceUrl(config.webUrl);
+      setStep("gitlab");
+    } else if (config.supportsDeviceFlow) {
       setStep("device");
       setDevicePhase("starting");
       try {
@@ -134,9 +142,19 @@ export function AddAccountModal({ open, onClose }: AddAccountModalProps) {
     }
   }
 
+  function startGitLabOAuth() {
+    const url = instanceUrl.trim();
+    if (!url) {
+      setError(t("accounts.instanceUrlRequired"));
+      return;
+    }
+    window.location.assign(`/api/auth/gitlab/start?${new URLSearchParams({ instanceUrl: url })}`);
+  }
+
   async function submitToken(event: React.FormEvent) {
     event.preventDefault();
-    if (!selected) return;
+    const customGitLab = step === "gitlab";
+    if (!selected && !customGitLab) return;
     const trimmed = token.trim();
     if (!trimmed) {
       setError(t("accounts.tokenRequired"));
@@ -145,7 +163,9 @@ export function AddAccountModal({ open, onClose }: AddAccountModalProps) {
     setError("");
     setSubmitting(true);
     try {
-      await addTokenAccount({ providerConfigId: selected.id, token: trimmed });
+      await addTokenAccount(customGitLab
+        ? { instanceUrl: instanceUrl.trim(), token: trimmed }
+        : { providerConfigId: selected?.id, token: trimmed });
       setStep("success");
       await refresh();
       window.setTimeout(() => onClose(), 800);
@@ -158,7 +178,7 @@ export function AddAccountModal({ open, onClose }: AddAccountModalProps) {
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className="add-account-backdrop" role="dialog" aria-modal="true" aria-label={t("accounts.add")}>
       <div className="add-account-card">
         <div className="add-account-header">
@@ -177,11 +197,16 @@ export function AddAccountModal({ open, onClose }: AddAccountModalProps) {
                 className="add-account-provider"
                 onClick={() => void pickProvider(config)}
               >
-                <span className="add-account-provider-label">{config.label}</span>
-                <span className="add-account-provider-meta">
-                  {config.kind === "github" && config.supportsDeviceFlow
-                    ? t("accounts.viaDeviceFlow")
-                    : t("accounts.viaToken")}
+                <ProviderLogo kind={config.kind} />
+                <span className="add-account-provider-body">
+                  <span className="add-account-provider-label">{config.label}</span>
+                  <span className="add-account-provider-meta">
+                    {config.kind === "github" && config.supportsDeviceFlow
+                      ? t("accounts.viaDeviceFlow")
+                      : config.kind === "gitlab" && config.supportsOAuth
+                        ? t("accounts.viaOAuthOrToken")
+                        : t("accounts.viaToken")}
+                  </span>
                 </span>
               </button>
             ))}
@@ -208,14 +233,42 @@ export function AddAccountModal({ open, onClose }: AddAccountModalProps) {
           </div>
         ) : null}
 
-        {step === "token" && selected ? (
+        {(step === "token" && selected) || step === "gitlab" ? (
           <form className="add-account-token" onSubmit={(event) => void submitToken(event)}>
             <p className="auth-status">
-              {t("accounts.tokenHelp").replace("{provider}", selected.label)}
+              {t("accounts.tokenHelp").replace("{provider}", selected?.label ?? "GitLab")}
             </p>
-            <a className="auth-link" href={`${selected.webUrl}/user/settings/applications`} target="_blank" rel="noreferrer">
-              {selected.webUrl}/user/settings/applications
-            </a>
+            {step === "gitlab" ? (
+              <label className="add-account-field">
+                <span>{t("accounts.instanceUrl")}</span>
+                <input
+                  type="url"
+                  value={instanceUrl}
+                  autoComplete="url"
+                  onChange={(event) => setInstanceUrl(event.target.value)}
+                  placeholder="https://gitlab.example.com"
+                  required
+                  autoFocus
+                />
+              </label>
+            ) : selected ? (
+              <a className="auth-link" href={selected.tokenSettingsUrl} target="_blank" rel="noreferrer">
+                {selected.tokenSettingsUrl}
+              </a>
+            ) : null}
+            {step === "gitlab" && selected?.supportsOAuth && isSameGitLabInstance(instanceUrl, selected.oauthInstanceUrl) ? (
+              <>
+                <button className="auth-primary" type="button" onClick={startGitLabOAuth}>
+                  {t("accounts.connectOAuth")}
+                </button>
+                <div className="auth-divider"><span>{t("accounts.orToken")}</span></div>
+              </>
+            ) : null}
+            {step === "gitlab" && gitLabTokenSettingsUrl(instanceUrl) ? (
+              <a className="auth-link" href={gitLabTokenSettingsUrl(instanceUrl) ?? undefined} target="_blank" rel="noreferrer">
+                {gitLabTokenSettingsUrl(instanceUrl)}
+              </a>
+            ) : null}
             <label className="add-account-field">
               <span>{t("accounts.tokenLabel")}</span>
               <input
@@ -224,7 +277,7 @@ export function AddAccountModal({ open, onClose }: AddAccountModalProps) {
                 autoComplete="off"
                 onChange={(event) => setToken(event.target.value)}
                 placeholder="●●●●●●●●"
-                autoFocus
+                autoFocus={step !== "gitlab"}
               />
             </label>
             <button className="auth-primary" type="submit" disabled={submitting}>
@@ -237,6 +290,7 @@ export function AddAccountModal({ open, onClose }: AddAccountModalProps) {
 
         {error ? <p className="auth-error-line">{error}</p> : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

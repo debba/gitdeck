@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { nameWithOwnerFromApiUrl, parseRepositoryName } from "./utils/repository";
+import { buildGitLabInstanceConfig } from "./utils/gitlab";
 import { buildMentionQuery, isValidRepoName } from "./utils/aliasQuery";
 import { addAlias, getAliases, removeAlias } from "./server/aliasStore";
 import { CLIENT_INDEX_PATH, HOST, PORT, SOURCE_INDEX_PATH } from "./server/config";
@@ -36,8 +37,10 @@ import {
   listProviderConfigs,
   remove as removeAccountStore,
   setActive as setActiveAccount,
+  upsertProviderConfig,
 } from "./server/accountStore";
-import { getProvider, getProviderForAccount } from "./server/providers/registry";
+import { getProvider, getProviderForAccount, resetProviderCache } from "./server/providers/registry";
+import { GitLabProvider } from "./server/providers/gitlab";
 import { send, sendJson, sendJsonCacheable, sendStaticFile } from "./server/http";
 import {
   getNotificationsCached,
@@ -49,6 +52,7 @@ import { fetchRepoSecuritySummary } from "./server/securityAlerts";
 import { handleRepoInsights } from "./server/repoInsights";
 import { getCIHealthCached, invalidateCIHealthCache } from "./server/ciHealth";
 import { getProviderMetrics } from "./server/providerDiagnostics";
+import { finishGitLabOAuth, gitLabOAuthInstanceUrl, isGitLabOAuthConfigured, startGitLabOAuth } from "./server/gitlabOAuth";
 
 const STARGAZERS_QUERY = `
 query($owner:String!, $name:String!, $cursor:String, $direction:OrderDirection!) {
@@ -1019,6 +1023,43 @@ async function handleAuthLogout(req: IncomingMessage, res: ServerResponse): Prom
   sendJson(res, 200, { ok: true });
 }
 
+async function handleGitLabOAuthStart(req: IncomingMessage, res: ServerResponse, u: URL): Promise<void> {
+  if (req.method && req.method !== "GET") return sendJson(res, 405, { ok: false, error: "GET required" });
+  const instanceUrl = u.searchParams.get("instanceUrl")?.trim() || "https://gitlab.com";
+  const forwardedProto = String(req.headers["x-forwarded-proto"] ?? "").split(",")[0].trim();
+  const protocol = forwardedProto || (req.socket.localPort === 443 ? "https" : "http");
+  const host = req.headers.host || `${HOST}:${PORT}`;
+  const redirectUri = process.env.GITLAB_REDIRECT_URI?.trim() || `${protocol}://${host}/api/auth/gitlab/callback`;
+  try {
+    const destination = startGitLabOAuth(instanceUrl, redirectUri);
+    res.writeHead(302, { Location: destination, "Cache-Control": "no-store" });
+    res.end();
+  } catch (error) {
+    sendJson(res, 400, { ok: false, error: (error as Error).message });
+  }
+}
+
+async function handleGitLabOAuthCallback(res: ServerResponse, u: URL): Promise<void> {
+  const code = u.searchParams.get("code") || "";
+  const state = u.searchParams.get("state") || "";
+  const providerError = u.searchParams.get("error_description") || u.searchParams.get("error");
+  if (providerError) {
+    res.writeHead(302, { Location: `/?gitlabOAuth=error&message=${encodeURIComponent(providerError)}`, "Cache-Control": "no-store" });
+    return res.end();
+  }
+  try {
+    await finishGitLabOAuth(code, state);
+    invalidateDataCache();
+    invalidateNotificationsCache();
+    res.writeHead(302, { Location: "/?gitlabOAuth=success", "Cache-Control": "no-store" });
+    res.end();
+  } catch (error) {
+    const message = (error as Error).message || String(error);
+    res.writeHead(302, { Location: `/?gitlabOAuth=error&message=${encodeURIComponent(message)}`, "Cache-Control": "no-store" });
+    res.end();
+  }
+}
+
 /* ===================== ACCOUNTS ===================== */
 
 interface AccountSummary {
@@ -1088,38 +1129,56 @@ async function handleAccountActivate(req: IncomingMessage, res: ServerResponse):
 async function handleProviderConfigsList(res: ServerResponse): Promise<void> {
   await initAccountStore();
   const configs = await listProviderConfigs();
-  const summaries = Object.values(configs).map((cfg) => ({
+  const summaries = Object.values(configs)
+    .filter((cfg) => cfg.kind !== "gitlab" || cfg.id === "gitlab.com")
+    .map((cfg) => ({
     id: cfg.id,
     kind: cfg.kind,
     label: cfg.label,
     webUrl: cfg.webUrl,
+    tokenSettingsUrl: cfg.kind === "gitlab"
+      ? `${cfg.webUrl}/-/user_settings/personal_access_tokens`
+      : `${cfg.webUrl}/user/settings/applications`,
     supportsDeviceFlow: Boolean(cfg.oauthDeviceCodeUrl) && cfg.kind === "github",
+    supportsOAuth: cfg.kind === "gitlab" && isGitLabOAuthConfigured(),
+    oauthInstanceUrl: cfg.kind === "gitlab" && isGitLabOAuthConfigured() ? gitLabOAuthInstanceUrl() : null,
   }));
   sendJson(res, 200, { ok: true, configs: summaries });
 }
 
 async function handleAccountAddToken(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== "POST") return sendJson(res, 405, { ok: false, error: "POST required" });
-  let parsed: { providerConfigId?: string; token?: string; label?: string };
+  let parsed: { providerConfigId?: string; instanceUrl?: string; token?: string; label?: string };
   try { parsed = (await readJsonBody(req)) as typeof parsed; }
   catch { return sendJson(res, 400, { ok: false, error: "invalid JSON" }); }
-  const providerConfigId = (parsed.providerConfigId || "").trim();
+  let providerConfigId = (parsed.providerConfigId || "").trim();
+  const instanceUrl = (parsed.instanceUrl || "").trim();
   const token = (parsed.token || "").trim();
-  if (!providerConfigId) return sendJson(res, 400, { ok: false, error: "missing providerConfigId" });
+  if (!providerConfigId && !instanceUrl) return sendJson(res, 400, { ok: false, error: "missing providerConfigId or instanceUrl" });
   if (!token) return sendJson(res, 400, { ok: false, error: "missing token" });
   await initAccountStore();
-  const config = await getProviderConfig(providerConfigId);
-  if (!config) return sendJson(res, 404, { ok: false, error: "unknown providerConfigId" });
+
+  let config;
   let identity;
   try {
-    const provider = await getProvider(providerConfigId);
-    identity = await provider.fetchIdentity(token);
+    if (instanceUrl) {
+      config = buildGitLabInstanceConfig(instanceUrl);
+      providerConfigId = config.id;
+      identity = await new GitLabProvider(config).fetchIdentity(token);
+      await upsertProviderConfig(config);
+      resetProviderCache();
+    } else {
+      config = await getProviderConfig(providerConfigId);
+      if (!config) return sendJson(res, 404, { ok: false, error: "unknown providerConfigId" });
+      const provider = await getProvider(providerConfigId);
+      identity = await provider.fetchIdentity(token);
+    }
   } catch (error) {
     return sendJson(res, 400, { ok: false, error: (error as Error).message });
   }
   if (!identity.login) return sendJson(res, 400, { ok: false, error: "provider did not return a login" });
   const safeLogin = identity.login.replace(/[^a-zA-Z0-9_-]/g, "_");
-  const prefix = config.kind === "github" ? "gh" : "fj";
+  const prefix = config.kind === "github" ? "gh" : config.kind === "forgejo" ? "fj" : "gl";
   const webHost = new URL(config.webUrl).host;
   const account = await addAccount({
     id: `${prefix}_${safeLogin}_${providerConfigId}`,
@@ -1253,6 +1312,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const pathname = new URL(url, "http://localhost").pathname;
   if (APP_ROUTES.has(pathname)) return sendClientIndex(res);
   if (await sendStaticFile(res, pathname)) return;
+  if (pathname === "/api/auth/gitlab/start") return handleGitLabOAuthStart(req, res, new URL(url, "http://localhost"));
+  if (pathname === "/api/auth/gitlab/callback") return handleGitLabOAuthCallback(res, new URL(url, "http://localhost"));
   if (url.startsWith("/api/auth/status")) return handleAuthStatus(res);
   if (url.startsWith("/api/auth/start")) return handleAuthStart(req, res);
   if (url.startsWith("/api/auth/poll")) return handleAuthPoll(req, res);

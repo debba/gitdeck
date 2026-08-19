@@ -1,6 +1,6 @@
-export type ProviderKind = "github" | "forgejo";
+export type ProviderKind = "github" | "forgejo" | "gitlab";
 
-export type AccountSource = "device" | "gh-cli" | "token" | "env";
+export type AccountSource = "device" | "oauth" | "gh-cli" | "token" | "env";
 
 export interface ProviderConfig {
   id: string;
@@ -35,6 +35,8 @@ export interface Account {
   label: string;
   login: string | null;
   accessToken: string;
+  refreshToken?: string;
+  expiresAt?: string;
   scope: string;
   obtainedAt: string;
   source: AccountSource;

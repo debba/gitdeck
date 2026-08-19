@@ -100,6 +100,7 @@ describe("accountStore", () => {
     expect(data.accounts).toHaveLength(1);
     expect(data.providerConfigs["github.com"]).toBeDefined();
     expect(data.providerConfigs["codeberg.org"]).toBeDefined();
+    expect(data.providerConfigs["gitlab.com"]).toBeDefined();
   });
 
   it("is idempotent across re-initializations", async () => {

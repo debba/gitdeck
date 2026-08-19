@@ -10,7 +10,7 @@
   <a href="https://repostars.dev/?repos=debba%2Fgh-dashboard&theme=dark"><img src="https://repostars.dev/api/embed?repo=debba%2Fgh-dashboard&theme=dark" alt="RepoStars" /></a>
 </p>
 
-An open-source, local dashboard to explore repositories, issues, pull requests, traffic, and CI activity across multiple accounts on GitHub and Forgejo-compatible forges (Codeberg, self-hosted) — from a single interface.
+An open-source, local dashboard to explore repositories, issues, pull requests, traffic, and CI activity across multiple accounts on GitHub, GitLab, and Forgejo-compatible forges (Codeberg, self-hosted) — from a single interface.
 
 ## Demo
 
@@ -128,6 +128,10 @@ The server reads its configuration from environment variables:
 | `HOST`                 | no       | `127.0.0.1`                                    | Interface the server binds to                    |
 | `PORT`                 | no       | `8765`                                         | Port the server listens on                       |
 | `OPENAI_API_KEY`       | no       | —                                              | Enables AI-generated daily digest narratives     |
+| `GITLAB_CLIENT_ID`     | no       | —                                              | Enables GitLab OAuth when paired with `GITLAB_CLIENT_SECRET` |
+| `GITLAB_CLIENT_SECRET` | no       | —                                              | OAuth application secret for the selected GitLab instance |
+| `GITLAB_REDIRECT_URI`  | no       | inferred from request                          | Exact GitLab OAuth callback URL, ending in `/api/auth/gitlab/callback` |
+| `GITLAB_OAUTH_INSTANCE_URL` | no  | `https://gitlab.com`                           | GitLab instance on which the configured OAuth app is registered |
 | `OPENAI_DIGEST_MODEL`  | no       | `gpt-4.1-mini`                                 | Model used for digest narratives                 |
 | `GITDECK_DIAGNOSTICS`  | no       | —                                              | Set to `1` to log provider call durations        |
 
@@ -142,6 +146,14 @@ The dashboard can obtain a GitHub token in three different ways. Pick the one th
 In `gh-cli` and `token` modes the device-flow sign-in screen is hidden; the server treats the configured source as authoritative.
 
 Tokens and snapshots are persisted under `~/.gitdeck/`. If you previously ran an older build that stored data in `~/.gh-issues-dashboard/`, the server migrates it automatically on first start.
+
+### GitLab accounts
+
+Choose **GitLab** from the account picker. The instance URL defaults to `https://gitlab.com`; replace it to connect a self-hosted instance, including installations hosted under a URL path. You can always authenticate with a personal access token carrying the `api` scope.
+
+OAuth is shown when `GITLAB_CLIENT_ID` and `GITLAB_CLIENT_SECRET` are configured. Register an OAuth application on the target GitLab instance with scopes `api`, `read_user`, and `read_repository`. Its redirect URI must be `http(s)://<gitdeck-host>/api/auth/gitlab/callback`; set `GITLAB_REDIRECT_URI` when the URL cannot be inferred from the incoming request. OAuth application credentials are instance-specific: set `GITLAB_OAUTH_INSTANCE_URL` for a self-hosted instance. Other instances remain available through personal access tokens.
+
+The initial integration supports repositories, issues, merge requests, and pending todos in the inbox. GitLab CI, traffic, and repository detail APIs are not enabled yet.
 
 ### Quick env setup
 

@@ -1,6 +1,7 @@
 import { getProviderConfig } from "../accountStore";
 import { ForgejoProvider } from "./forgejo";
 import { GitHubProvider } from "./github";
+import { GitLabProvider } from "./gitlab";
 import type { Account, Provider, ProviderConfig } from "./types";
 
 const cache = new Map<string, Provider>();
@@ -11,6 +12,8 @@ function build(config: ProviderConfig): Provider {
       return new GitHubProvider(config);
     case "forgejo":
       return new ForgejoProvider(config);
+    case "gitlab":
+      return new GitLabProvider(config);
   }
 }
 
