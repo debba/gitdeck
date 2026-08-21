@@ -23,6 +23,8 @@ export interface CachedFilters {
     repos: string[];
     labels: string[];
     authors: string[];
+    excludedAuthors?: string[];
+    authorMode?: "include" | "exclude";
     assignees: string[];
     dates: { cf: string; ct: string; uf: string; ut: string };
     preset: string;
@@ -33,6 +35,8 @@ export interface CachedFilters {
     repos: string[];
     labels: string[];
     authors: string[];
+    excludedAuthors?: string[];
+    authorMode?: "include" | "exclude";
     assignees: string[];
     dates: { cf: string; ct: string; uf: string; ut: string };
     preset: string;
@@ -47,6 +51,7 @@ export interface CachedFilters {
 }
 
 const VALID_VISIBILITY = new Set(["all", "public", "private"]);
+const VALID_AUTHOR_MODES = new Set(["include", "exclude"]);
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
@@ -82,6 +87,8 @@ function validateShape(parsed: unknown): parsed is CachedFilters {
   if (!isStringArray(issueF.repos)) return false;
   if (!isStringArray(issueF.labels)) return false;
   if (!isStringArray(issueF.authors)) return false;
+  if (issueF.excludedAuthors !== undefined && !isStringArray(issueF.excludedAuthors)) return false;
+  if (issueF.authorMode !== undefined && (typeof issueF.authorMode !== "string" || !VALID_AUTHOR_MODES.has(issueF.authorMode))) return false;
   if (!isStringArray(issueF.assignees)) return false;
   if (!isDateFilters(issueF.dates)) return false;
   if (typeof issueF.preset !== "string") return false;
@@ -95,6 +102,8 @@ function validateShape(parsed: unknown): parsed is CachedFilters {
   if (!isStringArray(prF.repos)) return false;
   if (!isStringArray(prF.labels)) return false;
   if (!isStringArray(prF.authors)) return false;
+  if (prF.excludedAuthors !== undefined && !isStringArray(prF.excludedAuthors)) return false;
+  if (prF.authorMode !== undefined && (typeof prF.authorMode !== "string" || !VALID_AUTHOR_MODES.has(prF.authorMode))) return false;
   if (!isStringArray(prF.assignees)) return false;
   if (!isDateFilters(prF.dates)) return false;
   if (typeof prF.preset !== "string") return false;
@@ -126,6 +135,17 @@ export function readFiltersCache(): CachedFilters | null {
  * are kept in the Sets — the existing filter logic in App.tsx intersects them
  * with the current facets, so non-matching entries simply produce 0 results.
  */
+function hydrateAuthorSelections(filters: { authors: string[]; excludedAuthors?: string[]; authorMode?: "include" | "exclude" }) {
+  if (filters.excludedAuthors !== undefined) {
+    return { authors: new Set(filters.authors), excludedAuthors: new Set(filters.excludedAuthors) };
+  }
+
+  // Older caches used authorMode to interpret one shared author selection.
+  return filters.authorMode === "exclude"
+    ? { authors: new Set<string>(), excludedAuthors: new Set(filters.authors) }
+    : { authors: new Set(filters.authors), excludedAuthors: new Set<string>() };
+}
+
 export function hydrateFilters(cached: CachedFilters): {
   repoFilters: RepoFilters;
   issueFilters: IssueFilters;
@@ -149,7 +169,8 @@ export function hydrateFilters(cached: CachedFilters): {
       orgs: new Set(cached.issueFilters.orgs),
       repos: new Set(cached.issueFilters.repos),
       labels: new Set(cached.issueFilters.labels),
-      authors: new Set(cached.issueFilters.authors),
+      ...hydrateAuthorSelections(cached.issueFilters),
+      authorMode: cached.issueFilters.authorMode ?? "include",
       assignees: new Set(cached.issueFilters.assignees),
       dates: { ...cached.issueFilters.dates },
       preset: cached.issueFilters.preset,
@@ -159,7 +180,8 @@ export function hydrateFilters(cached: CachedFilters): {
       orgs: new Set(cached.prFilters.orgs),
       repos: new Set(cached.prFilters.repos),
       labels: new Set(cached.prFilters.labels),
-      authors: new Set(cached.prFilters.authors),
+      ...hydrateAuthorSelections(cached.prFilters),
+      authorMode: cached.prFilters.authorMode ?? "include",
       assignees: new Set(cached.prFilters.assignees),
       dates: { ...cached.prFilters.dates },
       preset: cached.prFilters.preset,
@@ -193,6 +215,8 @@ export function writeFiltersCache(
         repos: [...issueFilters.repos],
         labels: [...issueFilters.labels],
         authors: [...issueFilters.authors],
+        excludedAuthors: [...issueFilters.excludedAuthors],
+        authorMode: issueFilters.authorMode,
         assignees: [...issueFilters.assignees],
         dates: { ...issueFilters.dates },
         preset: issueFilters.preset,
@@ -203,6 +227,8 @@ export function writeFiltersCache(
         repos: [...prFilters.repos],
         labels: [...prFilters.labels],
         authors: [...prFilters.authors],
+        excludedAuthors: [...prFilters.excludedAuthors],
+        authorMode: prFilters.authorMode,
         assignees: [...prFilters.assignees],
         dates: { ...prFilters.dates },
         preset: prFilters.preset,

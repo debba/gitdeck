@@ -153,7 +153,43 @@ describe("dashboard utilities", () => {
       repos: new Set(["acme/app"]),
       labels: new Set(["bug"]),
       authors: new Set(),
+      excludedAuthors: new Set(),
+      authorMode: "include",
       assignees: new Set(["bob"]),
+      dates: { cf: "", ct: "", uf: "", ut: "" },
+      preset: "",
+    }, "alice");
+
+    expect(result.map((issue) => issue.number)).toEqual([1]);
+  });
+
+  it("excludes selected issue authors", () => {
+    const result = filterIssues(issues, {
+      search: "",
+      orgs: new Set(),
+      repos: new Set(),
+      labels: new Set(),
+      authors: new Set(),
+      excludedAuthors: new Set(["alice"]),
+      authorMode: "exclude",
+      assignees: new Set(),
+      dates: { cf: "", ct: "", uf: "", ut: "" },
+      preset: "",
+    }, "alice");
+
+    expect(result.map((issue) => issue.number)).toEqual([2]);
+  });
+
+  it("includes and excludes issue authors at the same time", () => {
+    const result = filterIssues(issues, {
+      search: "",
+      orgs: new Set(),
+      repos: new Set(),
+      labels: new Set(),
+      authors: new Set(["alice", "bob"]),
+      excludedAuthors: new Set(["bob"]),
+      authorMode: "exclude",
+      assignees: new Set(),
       dates: { cf: "", ct: "", uf: "", ut: "" },
       preset: "",
     }, "alice");
@@ -253,11 +289,47 @@ describe("dashboard utilities", () => {
       repos: new Set(["acme/app"]),
       labels: new Set(),
       authors: new Set(["alice"]),
+      excludedAuthors: new Set(),
+      authorMode: "include",
       assignees: new Set(),
       dates: { cf: "", ct: "", uf: "", ut: "" },
       preset: "",
     }, "alice");
     expect(result.map((pr) => pr.number)).toEqual([11]);
+  });
+
+  it("excludes selected pull request authors", () => {
+    const result = filterPullRequests(pullRequests, {
+      search: "",
+      orgs: new Set(),
+      repos: new Set(),
+      labels: new Set(),
+      authors: new Set(),
+      excludedAuthors: new Set(["bob"]),
+      authorMode: "exclude",
+      assignees: new Set(),
+      dates: { cf: "", ct: "", uf: "", ut: "" },
+      preset: "",
+    }, "alice");
+
+    expect(result.map((pr) => pr.number)).toEqual([10, 11]);
+  });
+
+  it("includes and excludes pull request authors at the same time", () => {
+    const result = filterPullRequests(pullRequests, {
+      search: "",
+      orgs: new Set(),
+      repos: new Set(),
+      labels: new Set(),
+      authors: new Set(["alice", "bob"]),
+      excludedAuthors: new Set(["bob"]),
+      authorMode: "include",
+      assignees: new Set(),
+      dates: { cf: "", ct: "", uf: "", ut: "" },
+      preset: "",
+    }, "alice");
+
+    expect(result.map((pr) => pr.number)).toEqual([10, 11]);
   });
 
   it("sorts PRs by review-pending and diff size", () => {
