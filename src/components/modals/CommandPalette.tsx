@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GhIssue, GhPullRequest, GhRepo } from "../../types/github";
+import { useI18n } from "../../i18n/I18nProvider";
+import type { TranslationKey } from "../../i18n/translations";
 
 export type PaletteTab =
   | "inbox"
@@ -34,24 +36,24 @@ interface Entry {
   run: () => void;
 }
 
-const TAB_DEFS: { key: PaletteTab; label: string }[] = [
-  { key: "inbox", label: "Inbox" },
-  { key: "repos", label: "Repositories" },
-  { key: "issues", label: "Issues" },
-  { key: "prs", label: "Pull Requests" },
-  { key: "insights", label: "Insights" },
-  { key: "alerts", label: "Alerts" },
-  { key: "ci", label: "CI" },
-  { key: "digests", label: "Digest" },
-  { key: "kanban", label: "Board" },
+const TAB_DEFS: { key: PaletteTab; labelKey: TranslationKey }[] = [
+  { key: "inbox", labelKey: "tabs.inbox" },
+  { key: "repos", labelKey: "tabs.repositories" },
+  { key: "issues", labelKey: "tabs.issues" },
+  { key: "prs", labelKey: "tabs.pullRequests" },
+  { key: "insights", labelKey: "tabs.insights" },
+  { key: "alerts", labelKey: "tabs.alerts" },
+  { key: "ci", labelKey: "tabs.ci" },
+  { key: "digests", labelKey: "tabs.digest" },
+  { key: "kanban", labelKey: "tabs.board" },
 ];
 
-const SECTION_LABELS: Record<EntryKind, string> = {
-  tab: "Navigate",
-  action: "Actions",
-  repo: "Repositories",
-  pr: "Pull Requests",
-  issue: "Issues",
+const SECTION_LABEL_KEYS: Record<EntryKind, TranslationKey> = {
+  tab: "palette.navigate",
+  action: "palette.actions",
+  repo: "tabs.repositories",
+  pr: "tabs.pullRequests",
+  issue: "tabs.issues",
 };
 
 const SECTION_ORDER: EntryKind[] = ["tab", "action", "repo", "pr", "issue"];
@@ -84,6 +86,7 @@ export function CommandPalette({
   onToggleTheme,
   onClose,
 }: CommandPaletteProps) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -96,28 +99,29 @@ export function CommandPalette({
   const allEntries = useMemo<Entry[]>(() => {
     const entries: Entry[] = [];
     for (const tab of TAB_DEFS) {
+      const label = t(tab.labelKey);
       entries.push({
         id: `tab:${tab.key}`,
         kind: "tab",
-        label: tab.label,
-        hint: "Tab",
-        haystack: tab.label.toLowerCase(),
+        label,
+        hint: t("palette.tab"),
+        haystack: label.toLowerCase(),
         run: () => onNavigateTab(tab.key),
       });
     }
     entries.push({
       id: "action:refresh",
       kind: "action",
-      label: "Refresh data",
-      hint: "Reload from GitHub",
+      label: t("palette.refreshData"),
+      hint: t("palette.reloadFromGitHub"),
       haystack: "refresh reload sync",
       run: () => onRefresh(),
     });
     entries.push({
       id: "action:theme",
       kind: "action",
-      label: "Toggle theme",
-      hint: "Dark / Light / Auto",
+      label: t("palette.toggleTheme"),
+      hint: t("palette.themeHint"),
       haystack: "toggle theme dark light auto appearance",
       run: () => onToggleTheme(),
     });
@@ -126,7 +130,7 @@ export function CommandPalette({
         id: `repo:${repo.nameWithOwner}`,
         kind: "repo",
         label: repo.nameWithOwner,
-        hint: repo.primaryLanguage?.name || (repo.isPrivate ? "private" : "public"),
+        hint: repo.primaryLanguage?.name || (repo.isPrivate ? t("repo.private") : t("repo.public")),
         haystack: `${repo.nameWithOwner} ${repo.description ?? ""}`.toLowerCase(),
         run: () => onOpenRepo(repo),
       });
@@ -136,7 +140,7 @@ export function CommandPalette({
         id: `pr:${pr.repository.nameWithOwner}#${pr.number}`,
         kind: "pr",
         label: `${pr.repository.nameWithOwner}#${pr.number} — ${pr.title}`,
-        hint: pr.isDraft ? "Draft" : pr.reviewDecision === "APPROVED" ? "Approved" : "Open PR",
+        hint: pr.isDraft ? t("list.draft") : pr.reviewDecision === "APPROVED" ? t("stats.approved") : t("palette.openPr"),
         haystack: `${pr.repository.nameWithOwner} #${pr.number} ${pr.title}`.toLowerCase(),
         run: () => window.open(pr.url, "_blank", "noopener,noreferrer"),
       });
@@ -146,13 +150,13 @@ export function CommandPalette({
         id: `issue:${issue.repository.nameWithOwner}#${issue.number}`,
         kind: "issue",
         label: `${issue.repository.nameWithOwner}#${issue.number} — ${issue.title}`,
-        hint: "Open issue",
+        hint: t("palette.openIssue"),
         haystack: `${issue.repository.nameWithOwner} #${issue.number} ${issue.title}`.toLowerCase(),
         run: () => window.open(issue.url, "_blank", "noopener,noreferrer"),
       });
     }
     return entries;
-  }, [repos, issues, pullRequests, onNavigateTab, onOpenRepo, onRefresh, onToggleTheme]);
+  }, [repos, issues, pullRequests, onNavigateTab, onOpenRepo, onRefresh, onToggleTheme, t]);
 
   const results = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -222,14 +226,14 @@ export function CommandPalette({
         className="command-palette"
         role="dialog"
         aria-modal="true"
-        aria-label="Command palette"
+        aria-label={t("palette.label")}
       >
         <div className="command-palette-input-row">
           <span className="command-palette-icon" aria-hidden="true">⌘</span>
           <input
             ref={inputRef}
             className="command-palette-input"
-            placeholder="Search repositories, issues, PRs, or jump to a tab…"
+            placeholder={t("palette.placeholder")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={handleKeyDown}
@@ -239,14 +243,14 @@ export function CommandPalette({
         </div>
         <div className="command-palette-results" ref={listRef}>
           {results.flat.length === 0 ? (
-            <div className="command-palette-empty">No matches</div>
+            <div className="command-palette-empty">{t("palette.noMatches")}</div>
           ) : (
             SECTION_ORDER.map((kind) => {
               const items = results.grouped[kind];
               if (!items.length) return null;
               return (
                 <div className="command-palette-section" key={kind}>
-                  <div className="command-palette-section-title">{SECTION_LABELS[kind]}</div>
+                  <div className="command-palette-section-title">{t(SECTION_LABEL_KEYS[kind])}</div>
                   {items.map((entry) => {
                     const idx = runningIndex++;
                     const active = idx === activeIndex;
@@ -275,9 +279,9 @@ export function CommandPalette({
           )}
         </div>
         <footer className="command-palette-foot">
-          <span><kbd className="kbd kbd--sm">↑</kbd><kbd className="kbd kbd--sm">↓</kbd> navigate</span>
-          <span><kbd className="kbd kbd--sm">↵</kbd> select</span>
-          <span><kbd className="kbd kbd--sm">esc</kbd> close</span>
+          <span><kbd className="kbd kbd--sm">↑</kbd><kbd className="kbd kbd--sm">↓</kbd> {t("palette.navigateHint")}</span>
+          <span><kbd className="kbd kbd--sm">↵</kbd> {t("palette.selectHint")}</span>
+          <span><kbd className="kbd kbd--sm">esc</kbd> {t("palette.closeHint")}</span>
         </footer>
       </div>
     </div>

@@ -23,11 +23,14 @@ import { clampPage } from "../../utils/pagination";
 import { Pagination } from "../common/Pagination";
 import { CloseIcon, ForkIcon, IssueIcon, PinIcon, RefreshIcon, StarIcon } from "../common/Icons";
 import { Markdown } from "../common/Markdown";
+import { useI18n } from "../../i18n/I18nProvider";
 
 interface RepositoryDetailsModalProps {
   repo: GhRepo;
   issues: GhIssue[];
   pullRequests: GhPullRequest[];
+  issuesLoaded: boolean;
+  pullRequestsLoaded: boolean;
   activeTab: DetailTab;
   onTabChange: (tab: DetailTab) => void;
   onClose: () => void;
@@ -56,8 +59,8 @@ function loadPinnedDetailTabs(): DetailTab[] {
   }
 }
 
-function formatReleaseDate(iso: string | null | undefined) {
-  if (!iso) return "Unpublished";
+function formatReleaseDate(iso: string | null | undefined, unpublished: string) {
+  if (!iso) return unpublished;
   return new Date(iso).toLocaleDateString();
 }
 
@@ -73,9 +76,10 @@ function apiErrorMessage(raw: string | null | undefined): string | null {
 }
 
 function SourceErrorBanner({ label, error }: { label: string; error: string | null | undefined }) {
+  const { t } = useI18n();
   const message = apiErrorMessage(error);
   if (!message) return null;
-  return <div className="modal-info-banner">{label} could not be loaded: {message}</div>;
+  return <div className="modal-info-banner">{t("repoDetails.couldNotLoad", { label, message })}</div>;
 }
 
 function chartPath(values: number[], width: number, height: number) {
@@ -91,6 +95,7 @@ function chartPath(values: number[], width: number, height: number) {
 }
 
 function MiniChart({ title, values, tone = "accent" }: { title: string; values: number[]; tone?: "accent" | "purple" | "green" | "amber" }) {
+  const { t } = useI18n();
   const width = 240;
   const height = 72;
   const path = chartPath(values, width, height);
@@ -110,15 +115,20 @@ function MiniChart({ title, values, tone = "accent" }: { title: string; values: 
           <path className="repo-chart-line" d={path} />
         </svg>
       ) : (
-        <div className="repo-chart-empty">Not enough data</div>
+        <div className="repo-chart-empty">{t("repoDetails.notEnoughData")}</div>
       )}
-      <em>{delta === 0 ? "No change" : `${delta > 0 ? "+" : ""}${formatNumber(delta)} in range`}</em>
+      <em>{delta === 0 ? t("repoDetails.noChange") : t("repoDetails.inRange", { value: `${delta > 0 ? "+" : ""}${formatNumber(delta)}` })}</em>
     </div>
   );
 }
 
-export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, onTabChange, onClose, onIssuesClick }: RepositoryDetailsModalProps) {
+export function RepositoryDetailsModal({ repo, issues, pullRequests, issuesLoaded, pullRequestsLoaded, activeTab, onTabChange, onClose, onIssuesClick }: RepositoryDetailsModalProps) {
+  const { t } = useI18n();
   const [details, setDetails] = useState<RepoDetailsData | null>(null);
+  const [detailCounts, setDetailCounts] = useState<RepoDetailsData["counts"]>(undefined);
+  const [countsLoading, setCountsLoading] = useState(true);
+  const [loadedTabs, setLoadedTabs] = useState<Set<DetailTab>>(() => new Set());
+  const [failedTabs, setFailedTabs] = useState<Set<DetailTab>>(() => new Set());
   const [mentionIssues, setMentionIssues] = useState<MentionIssueItem[]>([]);
   const [mentionCode, setMentionCode] = useState<MentionCodeItem[]>([]);
   const [dependents, setDependents] = useState<DependentItem[]>([]);
@@ -198,6 +208,20 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    setCountsLoading(true);
+    void fetchRepoDetails(repo.nameWithOwner, "minimal", refreshKey > 0)
+      .then((result) => {
+        if (!cancelled) setDetailCounts(result.counts);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setCountsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [repo.nameWithOwner, refreshKey]);
+
+  useEffect(() => {
     const section = activeTab === "overview" || activeTab === "actions" || activeTab === "commits" || activeTab === "milestones" || activeTab === "releases"
       ? activeTab
       : null;
@@ -210,10 +234,21 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
     setError("");
     void fetchRepoDetails(repo.nameWithOwner, section, refreshKey > 0)
       .then((result) => {
-        if (!cancelled) setDetails(result);
+        if (!cancelled) {
+          setDetails(result);
+          setLoadedTabs((current) => new Set(current).add(section));
+          setFailedTabs((current) => {
+            const next = new Set(current);
+            next.delete(section);
+            return next;
+          });
+        }
       })
       .catch((err) => {
-        if (!cancelled) setError((err as Error).message);
+        if (!cancelled) {
+          setError((err as Error).message);
+          setFailedTabs((current) => new Set(current).add(section));
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -232,6 +267,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
         setMentionIssues(issueRefs.items);
         setMentionCode(codeRefs.items);
         setAliases(issueRefs.aliases ?? []);
+        setLoadedTabs((current) => new Set(current).add("mentions"));
       })
       .catch((err) => { if (!cancelled) setError((err as Error).message); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -244,7 +280,12 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
     setLoading(true);
     setError("");
     void fetchDependents(repo.nameWithOwner)
-      .then((result) => { if (!cancelled) setDependents(result.items); })
+      .then((result) => {
+        if (!cancelled) {
+          setDependents(result.items);
+          setLoadedTabs((current) => new Set(current).add("dependents"));
+        }
+      })
       .catch((err) => { if (!cancelled) setError((err as Error).message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -256,13 +297,23 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
     setLoading(true);
     setError("");
     void fetchRepoTraffic(repo.nameWithOwner)
-      .then((result) => { if (!cancelled) setTrafficDetails(result); })
+      .then((result) => {
+        if (!cancelled) {
+          setTrafficDetails(result);
+          setLoadedTabs((current) => new Set(current).add("traffic"));
+        }
+      })
       .catch((err) => { if (!cancelled) setError((err as Error).message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [activeTab, repo.nameWithOwner, refreshKey]);
 
   useEffect(() => {
+    setDetails(null);
+    setDetailCounts(undefined);
+    setCountsLoading(true);
+    setLoadedTabs(new Set());
+    setFailedTabs(new Set());
     setContributorsPage(1);
     setMentionsPage(1);
     setActionsPage(1);
@@ -295,6 +346,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
         setForks(result.nodes);
         setForksTotal(result.totalCount);
         setForksPage(1);
+        setLoadedTabs((current) => new Set(current).add("forks"));
       })
       .catch((err) => {
         if (!cancelled) setForksError((err as Error).message);
@@ -318,6 +370,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
         setBranches(result.branches);
         setBranchesTotal(result.totalCount);
         setBranchesPage(1);
+        setLoadedTabs((current) => new Set(current).add("branches"));
       })
       .catch((err) => {
         if (!cancelled) setBranchesError((err as Error).message);
@@ -342,6 +395,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
         setDiscussionsTotal(result.totalCount);
         setDiscussionsEnabled(result.enabled);
         setDiscussionsPage(1);
+        setLoadedTabs((current) => new Set(current).add("discussions"));
       })
       .catch((err) => {
         if (!cancelled) setDiscussionsError((err as Error).message);
@@ -389,7 +443,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
       return;
     }
     if (value === repo.nameWithOwner) {
-      setAliasError("Alias cannot be the current repository name.");
+      setAliasError(t("repoDetails.aliasCurrent"));
       return;
     }
     setAliasBusy(true);
@@ -425,7 +479,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
   const language = repo.primaryLanguage?.name || "";
   const starsDelta = historyDelta(repo, "stars");
   const forksDelta = historyDelta(repo, "forks");
-  const description = details?.meta?.description ?? repo.description ?? "No description";
+  const description = details?.meta?.description ?? repo.description ?? t("repo.noDescription");
   const contributors = details?.contributors || [];
   const topics = details?.meta?.topics || [];
   const languages = Object.entries(details?.languages || {}).sort((a, b) => b[1] - a[1]).slice(0, 5);
@@ -441,6 +495,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
   const isReadOnly = ["READ", "TRIAGE"].includes(repo.viewerPermission ?? "") || details?.meta?.permissions?.push === false;
   const homepage = details?.meta?.homepage?.trim() || null;
   const totalReleaseDownloads = releases.reduce((sum, release) => sum + release.totalDownloads, 0);
+  const releasesLoading = activeTab === "releases" && (loading || (!loadedTabs.has("releases") && !failedTabs.has("releases")));
   const stableReleases = releases.filter((release) => !release.prerelease && !release.draft);
   const preReleases = releases.filter((release) => release.prerelease && !release.draft);
   const draftReleases = releases.filter((release) => release.draft);
@@ -452,16 +507,15 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
         ? draftReleases
         : releases;
   const releaseFilters: { key: ReleaseFilter; label: string; count: number }[] = [
-    { key: "all", label: "All", count: releases.length },
-    { key: "stable", label: "Releases", count: stableReleases.length },
-    { key: "prerelease", label: "Pre-releases", count: preReleases.length },
-    { key: "draft", label: "Drafts", count: draftReleases.length },
+    { key: "all", label: t("repoDetails.filterAll"), count: releases.length },
+    { key: "stable", label: t("repoDetails.filterStable"), count: stableReleases.length },
+    { key: "prerelease", label: t("repoDetails.filterPrerelease"), count: preReleases.length },
+    { key: "draft", label: t("repoDetails.filterDraft"), count: draftReleases.length },
   ];
   const repoDigest = details?.digest ?? null;
   const commits = details?.commits ?? [];
   const milestones = details?.milestones ?? [];
   const community = details?.community ?? null;
-  const detailCounts = details?.counts ?? null;
   const detailErrors = details?.errors ?? {};
   const releasesPageSize = 10;
   const referrers = trafficDetails?.referrers ?? [];
@@ -500,19 +554,19 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
   const viewHistory = (views?.views || []).map((entry) => entry.count);
   const cloneHistory = (clones?.clones || []).map((entry) => entry.count);
   const detailTabs = [
-    { key: "overview" as const, label: "Overview", count: contributors.length + languages.length + (repoDigest ? 1 : 0) },
-    { key: "actions" as const, label: "Actions", count: workflows.length },
-    { key: "commits" as const, label: "Commits", count: commits.length },
-    { key: "pull-requests" as const, label: "PRs", count: repoPullRequests.length },
-    { key: "issues" as const, label: "Issues", count: repoIssues.length },
-    { key: "milestones" as const, label: "Milestones", count: milestones.length },
-    { key: "releases" as const, label: "Releases", count: releases.length },
-    { key: "branches" as const, label: "Branches", count: branchesTotal || detailCounts?.branches || 0 },
-    { key: "forks" as const, label: "Forks", count: forksTotal || repo.forkCount },
-    { key: "traffic" as const, label: "Traffic", count: referrers.length + popularPaths.length },
-    { key: "mentions" as const, label: "Mentions", count: mentionItems.length + aliases.length },
-    { key: "discussions" as const, label: "Discussions", count: discussionsTotal || detailCounts?.discussions || 0 },
-    { key: "dependents" as const, label: "Dependents", count: dependents.length },
+    { key: "overview" as const, label: t("repoDetails.overview"), count: contributors.length + languages.length + (repoDigest ? 1 : 0), ready: loadedTabs.has("overview"), preloaded: false },
+    { key: "actions" as const, label: t("repoDetails.actions"), count: detailCounts?.actions ?? workflows.length, ready: detailCounts?.actions != null || loadedTabs.has("actions"), preloaded: true },
+    { key: "commits" as const, label: t("repoDetails.commits"), count: detailCounts?.commits ?? commits.length, ready: detailCounts?.commits != null || loadedTabs.has("commits"), preloaded: true },
+    { key: "pull-requests" as const, label: t("list.pr"), count: detailCounts?.pullRequests ?? repoPullRequests.length, ready: detailCounts?.pullRequests != null || pullRequestsLoaded, preloaded: true },
+    { key: "issues" as const, label: t("tabs.issues"), count: detailCounts?.issues ?? repoIssues.length, ready: detailCounts?.issues != null || issuesLoaded, preloaded: true },
+    { key: "milestones" as const, label: t("repoDetails.milestones"), count: detailCounts?.milestones ?? milestones.length, ready: detailCounts?.milestones != null || loadedTabs.has("milestones"), preloaded: true },
+    { key: "releases" as const, label: t("repoDetails.releases"), count: detailCounts?.releases ?? releases.length, ready: detailCounts?.releases != null || loadedTabs.has("releases"), preloaded: true },
+    { key: "branches" as const, label: t("repoDetails.branches"), count: branchesTotal || detailCounts?.branches || 0, ready: loadedTabs.has("branches") || detailCounts?.branches != null, preloaded: true },
+    { key: "forks" as const, label: t("repoDetails.forks"), count: forksTotal || repo.forkCount, ready: true, preloaded: true },
+    { key: "traffic" as const, label: t("repoDetails.traffic"), count: referrers.length + popularPaths.length, ready: loadedTabs.has("traffic"), preloaded: false },
+    { key: "mentions" as const, label: t("repoDetails.mentions"), count: mentionItems.length + aliases.length, ready: loadedTabs.has("mentions"), preloaded: false },
+    { key: "discussions" as const, label: t("repoDetails.discussions"), count: discussionsTotal || detailCounts?.discussions || 0, ready: loadedTabs.has("discussions") || detailCounts?.discussions != null, preloaded: true },
+    { key: "dependents" as const, label: t("repoDetails.dependentsTab"), count: dependents.length, ready: loadedTabs.has("dependents"), preloaded: false },
   ];
   const primaryDetailTabs = pinnedDetailTabs
     .map((key) => detailTabs.find((item) => item.key === key))
@@ -533,7 +587,13 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
         }}
       >
         <span>{item.label}</span>
-        <strong>{loading && item.key !== "overview" && item.count === 0 ? "..." : formatNumber(item.count)}</strong>
+        <strong>{item.ready
+          ? formatNumber(item.count)
+          : item.preloaded && countsLoading || activeTab === item.key && loading
+            ? t("common.loading")
+            : item.preloaded
+              ? t("common.unavailable")
+              : t("common.availableOnOpen")}</strong>
       </button>
     );
   }
@@ -546,22 +606,22 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
           <div className="modal-title">
             <span className="modal-icon repository">R</span>
             <div style={{ minWidth: 0 }}>
-              <div className="kind">Repository</div>
+              <div className="kind">{t("repoDetails.repository")}</div>
               <h3>{repo.nameWithOwner}</h3>
             </div>
           </div>
           <div className="modal-head-actions">
             <a className="repo-open-external" href={repo.url} target="_blank" rel="noreferrer">
-              {repo.url.includes("github.com") ? "Open on GitHub" : "Open repository"} ↗
+              {repo.url.includes("github.com") ? t("common.openOnGitHub") : t("repoDetails.openRepository")} ↗
             </a>
             <button
               className={`modal-close modal-refresh ${loading ? "refreshing" : ""}`}
-              aria-label="Reload repository data"
-              title="Reload repository data"
+              aria-label={t("repoDetails.reload")}
+              title={t("repoDetails.reload")}
               disabled={loading}
               onClick={() => setRefreshKey((value) => value + 1)}
             ><RefreshIcon /></button>
-            <button className="modal-close" aria-label="Close" onClick={onClose}><CloseIcon /></button>
+            <button className="modal-close" aria-label={t("common.close")} onClick={onClose}><CloseIcon /></button>
           </div>
         </header>
 
@@ -571,53 +631,53 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
             <div className="repo-detail-title-row">
               <a className="repo-detail-title" href={repo.url} target="_blank" rel="noreferrer">{repo.nameWithOwner}</a>
               <div className="repo-badges">
-                {repo.isPrivate ? <span className="rb private">Private</span> : <span className="rb">Public</span>}
-                {repo.isArchived || details?.meta?.archived ? <span className="rb archived">Archived</span> : null}
-                {repo.isFork ? <span className="rb fork">Fork</span> : null}
-                {isTemplate ? <span className="rb template">Template</span> : null}
-                {isReadOnly ? <span className="rb readonly">Read-only</span> : null}
+                {repo.isPrivate ? <span className="rb private">{t("repo.private")}</span> : <span className="rb">{t("repo.public")}</span>}
+                {repo.isArchived || details?.meta?.archived ? <span className="rb archived">{t("repo.archived")}</span> : null}
+                {repo.isFork ? <span className="rb fork">{t("repo.fork")}</span> : null}
+                {isTemplate ? <span className="rb template">{t("repo.template")}</span> : null}
+                {isReadOnly ? <span className="rb readonly">{t("repo.readOnly")}</span> : null}
               </div>
             </div>
             <p>{description}</p>
             {topics.length ? <div className="repo-detail-topics">{topics.slice(0, 8).map((topic) => <span key={topic}>{topic}</span>)}</div> : null}
-            <div className="repo-quick-actions" aria-label="Repository links">
-              {homepage ? <a href={homepage} target="_blank" rel="noreferrer">Documentation ↗</a> : null}
-              <button type="button" onClick={() => void copyCloneUrl()}>{cloneCopied ? "Clone URL copied" : "Copy clone URL"}</button>
+            <div className="repo-quick-actions" aria-label={t("repoDetails.links")}>
+              {homepage ? <a href={homepage} target="_blank" rel="noreferrer">{t("repoDetails.documentation")} ↗</a> : null}
+              <button type="button" onClick={() => void copyCloneUrl()}>{cloneCopied ? t("repoDetails.cloneUrlCopied") : t("repoDetails.copyCloneUrl")}</button>
             </div>
           </section>
 
-          <section className="repo-detail-stats" aria-label="Repository stats">
-            <div className="repo-detail-stat"><StarIcon /><span>Stars</span><strong>{formatNumber(repo.stargazerCount)}</strong></div>
-            <div className="repo-detail-stat"><ForkIcon /><span>Forks</span><strong>{formatNumber(repo.forkCount)}</strong></div>
-            <button className="repo-detail-stat action" onClick={() => onIssuesClick(repo.nameWithOwner)}><IssueIcon /><span>Open issues</span><strong>{formatNumber(issueCountForRepo(issues, repo.nameWithOwner, repo.openIssueCount))}</strong></button>
+          <section className="repo-detail-stats" aria-label={t("repoDetails.stats")}>
+            <div className="repo-detail-stat"><StarIcon /><span>{t("repoDetails.stars")}</span><strong>{formatNumber(repo.stargazerCount)}</strong></div>
+            <div className="repo-detail-stat"><ForkIcon /><span>{t("repoDetails.forks")}</span><strong>{formatNumber(repo.forkCount)}</strong></div>
+            <button className="repo-detail-stat action" onClick={() => onIssuesClick(repo.nameWithOwner)}><IssueIcon /><span>{t("repoDetails.openIssues")}</span><strong>{formatNumber(issueCountForRepo(issues, repo.nameWithOwner, repo.openIssueCount))}</strong></button>
           </section>
 
           <section className="repo-detail-grid">
-            <div><div className="repo-detail-label">Owner</div><div className="repo-detail-value">{repo.owner.login}</div></div>
+            <div><div className="repo-detail-label">{t("repoDetails.owner")}</div><div className="repo-detail-value">{repo.owner.login}</div></div>
             <div>
-              <div className="repo-detail-label">Language</div>
-              <div className="repo-detail-value">{language ? <><span className="lang-dot" style={{ background: getLanguageColor(language) }} />{language}</> : "None"}</div>
+              <div className="repo-detail-label">{t("repoDetails.language")}</div>
+              <div className="repo-detail-value">{language ? <><span className="lang-dot" style={{ background: getLanguageColor(language) }} />{language}</> : t("common.none")}</div>
             </div>
-            <div><div className="repo-detail-label">Last push</div><div className="repo-detail-value" title={new Date(repo.pushedAt).toLocaleString()}>{formatRelativeTime(repo.pushedAt)}</div></div>
-            <div><div className="repo-detail-label">Last update</div><div className="repo-detail-value" title={new Date(repo.updatedAt).toLocaleString()}>{formatRelativeTime(repo.updatedAt)}</div></div>
-            {details?.meta?.license?.name ? <div><div className="repo-detail-label">License</div><div className="repo-detail-value">{details.meta.license.name}</div></div> : null}
-            {details?.meta?.default_branch ? <div><div className="repo-detail-label">Default branch</div><div className="repo-detail-value">{details.meta.default_branch}</div></div> : null}
-            {latestRelease ? <div><div className="repo-detail-label">Latest release</div><a className="repo-detail-value repo-detail-meta-link" href={latestRelease.html_url} target="_blank" rel="noreferrer" title={latestRelease.name || latestRelease.tag_name}>{latestRelease.tag_name}</a></div> : null}
-            {latestWorkflow && ciStatus ? <div><div className="repo-detail-label">CI status</div><a className={`repo-detail-value repo-detail-meta-link ci-meta-${ciStatus}`} href={latestWorkflow.html_url} target="_blank" rel="noreferrer" title={`${latestWorkflow.name || "Workflow"}: ${ciStatus}`}>{ciStatus.replaceAll("_", " ")}</a></div> : null}
+            <div><div className="repo-detail-label">{t("repoDetails.lastPush")}</div><div className="repo-detail-value" title={new Date(repo.pushedAt).toLocaleString()}>{formatRelativeTime(repo.pushedAt)}</div></div>
+            <div><div className="repo-detail-label">{t("repoDetails.lastUpdate")}</div><div className="repo-detail-value" title={new Date(repo.updatedAt).toLocaleString()}>{formatRelativeTime(repo.updatedAt)}</div></div>
+            {details?.meta?.license?.name ? <div><div className="repo-detail-label">{t("repoDetails.license")}</div><div className="repo-detail-value">{details.meta.license.name}</div></div> : null}
+            {details?.meta?.default_branch ? <div><div className="repo-detail-label">{t("repoDetails.defaultBranch")}</div><div className="repo-detail-value">{details.meta.default_branch}</div></div> : null}
+            {latestRelease ? <div><div className="repo-detail-label">{t("repoDetails.latestRelease")}</div><a className="repo-detail-value repo-detail-meta-link" href={latestRelease.html_url} target="_blank" rel="noreferrer" title={latestRelease.name || latestRelease.tag_name}>{latestRelease.tag_name}</a></div> : null}
+            {latestWorkflow && ciStatus ? <div><div className="repo-detail-label">{t("repoDetails.ciStatus")}</div><a className={`repo-detail-value repo-detail-meta-link ci-meta-${ciStatus}`} href={latestWorkflow.html_url} target="_blank" rel="noreferrer" title={`${latestWorkflow.name || t("repoDetails.workflow")}: ${ciStatus}`}>{ciStatus.replaceAll("_", " ")}</a></div> : null}
           </section>
 
-          <nav className="repo-detail-tabs" aria-label="Repository detail sections">
+          <nav className="repo-detail-tabs" aria-label={t("repoDetails.sections")}>
             <div className="repo-detail-primary-tabs">
               {primaryDetailTabs.map((item) => renderDetailTab(item))}
             </div>
             <details ref={moreTabsRef} className={`repo-detail-more ${activeMoreTab ? "active" : ""}`}>
-              <summary className="repo-detail-tab" aria-label="More repository sections">
-                <span>{activeMoreTab?.label ?? "More"}</span>
+              <summary className="repo-detail-tab" aria-label={t("repoDetails.moreSections")}>
+                <span>{activeMoreTab?.label ?? t("repoDetails.more")}</span>
                 {activeMoreTab ? <strong>{formatNumber(activeMoreTab.count)}</strong> : <span className="repo-detail-more-chevron">⌄</span>}
               </summary>
               <div className="repo-detail-more-menu">
                 <div className="repo-detail-more-head">
-                  <span>Customize toolbar</span>
+                  <span>{t("repoDetails.customizeToolbar")}</span>
                   <strong>{pinnedDetailTabs.length}/{MAX_PINNED_REPOSITORY_TABS} pinned</strong>
                 </div>
                 {detailTabs.map((item) => {
@@ -629,9 +689,9 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                       <button
                         type="button"
                         className={`repo-detail-pin ${pinned ? "active" : ""}`}
-                        aria-label={`${pinned ? "Unpin" : "Pin"} ${item.label}`}
+                        aria-label={`${pinned ? t("repoDetails.unpin") : t("repoDetails.pin")} ${item.label}`}
                         aria-pressed={pinned}
-                        title={pinLimitReached ? `You can pin up to ${MAX_PINNED_REPOSITORY_TABS} sections` : `${pinned ? "Unpin from" : "Pin to"} toolbar`}
+                        title={pinLimitReached ? t("repoDetails.pinLimit", { count: MAX_PINNED_REPOSITORY_TABS }) : pinned ? t("repoDetails.unpinFromToolbar") : t("repoDetails.pinToToolbar")}
                         disabled={pinLimitReached}
                         onClick={() => togglePinnedDetailTab(item.key)}
                       >
@@ -647,20 +707,20 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
           {activeTab === "overview" && repoDigest ? (
             <section>
               <div className="modal-section-title section-title-with-count">
-                <span>Daily repo digest</span>
+                <span>{t("repoDetails.dailyDigest")}</span>
                 <strong title={repoDigest.date}>{formatReadableDate(repoDigest.date)}</strong>
               </div>
               <div className="repo-detail-digest">
                 <div className="repo-detail-digest-head">
                   <div>
-                    <div className="digest-comparison-label">Changes vs previous day</div>
+                    <div className="digest-comparison-label">{t("repoDetails.changesPreviousDay")}</div>
                     <div className="repo-detail-digest-badges">
                       <span>★ {repoDigest.starsDelta >= 0 ? "+" : ""}{formatNumber(repoDigest.starsDelta)}</span>
                       <span>forks {repoDigest.forksDelta >= 0 ? "+" : ""}{formatNumber(repoDigest.forksDelta)}</span>
                       <span>issues {repoDigest.issueDelta >= 0 ? "+" : ""}{formatNumber(repoDigest.issueDelta)}</span>
                     </div>
                   </div>
-                  <button type="button" className={`digest-copy-btn ${digestCopied ? "copied" : ""}`} onClick={() => void copyRepoDigest()} aria-live="polite">{digestCopied ? "Copied!" : "Copy Markdown"}</button>
+                  <button type="button" className={`digest-copy-btn ${digestCopied ? "copied" : ""}`} onClick={() => void copyRepoDigest()} aria-live="polite">{digestCopied ? t("repoDetails.copied") : t("digest.copyMarkdown")}</button>
                 </div>
                 {repoDigest.ai ? (
                   <div className="digest-ai-block">
@@ -675,20 +735,20 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                 ) : null}
                 <div className="digest-pill-groups">
                   <div className="digest-pill-group digest-executive-summary">
-                    <h4>Executive Summary</h4>
+                    <h4>{t("digest.executiveSummary")}</h4>
                     <p>{repoDigest.executiveSummary.join(" ")}</p>
                   </div>
                   {repoDigest.momentum.length ? (
                     <div className="digest-pill-group positive">
-                      <h4>Momentum</h4>
+                      <h4>{t("digest.momentum")}</h4>
                       {repoDigest.momentum.map((item) => <span key={item}>{item}</span>)}
                     </div>
                   ) : null}
                   {repoDigest.risks.length ? (
                     <div className="digest-pill-group risk">
-                      <h4>Risks</h4>
+                      <h4>{t("digest.risks")}</h4>
                       {repoDigest.risks.map((item) => /issues/i.test(item)
-                        ? <button type="button" key={item} onClick={() => onIssuesClick(repo.nameWithOwner)} title="Open issues in dashboard">{item} ↗</button>
+                        ? <button type="button" key={item} onClick={() => onIssuesClick(repo.nameWithOwner)} title={t("repoDetails.openIssuesDashboard")}>{item} ↗</button>
                         : <span key={item}>{item}</span>)}
                     </div>
                   ) : null}
@@ -699,14 +759,14 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
 
           {activeTab === "overview" ? <section>
             <div className="modal-section-title section-title-with-count">
-              <span>Contributors</span>
-              <strong>{loading && !contributors.length ? "..." : formatNumber(contributors.length)}</strong>
+              <span>{t("repoDetails.contributors")}</span>
+              <strong>{loading && !contributors.length ? t("common.loading") : formatNumber(contributors.length)}</strong>
             </div>
-            {loading && !contributors.length ? <div className="modal-empty sub">Loading contributors...</div> : null}
+            {loading && !contributors.length ? <div className="modal-empty sub">{t("repoDetails.loadingContributors")}</div> : null}
             {contributors.length ? (
               <div className="repo-detail-contributors">
                 {pagedContributors.map((person, index) => {
-                  const name = person.login || person.name || person.email || "Anonymous";
+                  const name = person.login || person.name || person.email || t("repoDetails.anonymous");
                   return (
                   <a href={person.html_url || person.url} target="_blank" rel="noreferrer" key={`${name}-${index}`}>
                     {person.avatar_url || person.avatarUrl ? <img src={person.avatar_url || person.avatarUrl} alt="" /> : <span className="repo-detail-avatar-fallback">{name.slice(0, 1).toUpperCase()}</span>}
@@ -716,7 +776,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                   );
                 })}
                 </div>
-            ) : !loading ? <div className="modal-empty sub">No contributors available.</div> : null}
+            ) : !loading ? <div className="modal-empty sub">{t("repoDetails.noContributors")}</div> : null}
             {contributors.length ? (
               <Pagination
                 totalItems={contributors.length}
@@ -731,26 +791,26 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
 
           {activeTab === "overview" ? <section>
             <div className="modal-section-title section-title-with-count">
-              <span>Security and quality</span>
-              <strong>{security ? formatNumber(security.totalOpen) : "..."}</strong>
+              <span>{t("repoDetails.securityQuality")}</span>
+              <strong>{security ? formatNumber(security.totalOpen) : loading ? t("common.loading") : t("common.unavailable")}</strong>
             </div>
             <div className="repo-detail-traffic-grid">
               <div className="repo-detail-traffic-card">
-                <span className="repo-detail-traffic-label">Dependabot alerts</span>
-                <strong>{security ? formatNumber(security.dependabotOpen) : "..."}</strong>
+                <span className="repo-detail-traffic-label">{t("repoDetails.dependabotAlerts")}</span>
+                <strong>{security ? formatNumber(security.dependabotOpen) : loading ? t("common.loading") : t("common.unavailable")}</strong>
                 <em>
                   {security
-                    ? (security.dependabotOpen ? "Open dependency advisories." : "No open dependency alerts.")
-                    : "Loading security data..."}
+                    ? (security.dependabotOpen ? t("repoDetails.openDependencyAdvisories") : t("repoDetails.noDependencyAlerts"))
+                    : t("repoDetails.loadingSecurity")}
                 </em>
               </div>
               <div className="repo-detail-traffic-card">
-                <span className="repo-detail-traffic-label">Code scanning alerts</span>
-                <strong>{security ? formatNumber(security.codeScanningOpen) : "..."}</strong>
+                <span className="repo-detail-traffic-label">{t("repoDetails.codeScanningAlerts")}</span>
+                <strong>{security ? formatNumber(security.codeScanningOpen) : loading ? t("common.loading") : t("common.unavailable")}</strong>
                 <em>
                   {security
-                    ? (security.codeScanningOpen ? "Open code scanning findings." : "No open code scanning alerts.")
-                    : "Loading security data..."}
+                    ? (security.codeScanningOpen ? t("repoDetails.openCodeFindings") : t("repoDetails.noCodeAlerts"))
+                    : t("repoDetails.loadingSecurity")}
                 </em>
               </div>
             </div>
@@ -769,17 +829,17 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
           {activeTab === "overview" && community ? (
             <section>
               <div className="modal-section-title section-title-with-count">
-                <span>Community health</span>
+                <span>{t("repoDetails.communityHealth")}</span>
                 <strong>{community.health_percentage}%</strong>
               </div>
               <div className="community-files">
                 {([
-                  ["readme", "README"],
-                  ["license", "License"],
-                  ["contributing", "Contributing"],
-                  ["code_of_conduct", "Code of conduct"],
-                  ["issue_template", "Issue template"],
-                  ["pull_request_template", "PR template"],
+                  ["readme", t("repoDetails.readme")],
+                  ["license", t("repoDetails.license")],
+                  ["contributing", t("repoDetails.contributing")],
+                  ["code_of_conduct", t("repoDetails.codeOfConduct")],
+                  ["issue_template", t("repoDetails.issueTemplate")],
+                  ["pull_request_template", t("repoDetails.prTemplate")],
                 ] as const).map(([key, label]) => {
                   const present = Boolean(community.files?.[key]);
                   return (
@@ -794,7 +854,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
 
           {activeTab === "overview" && languages.length ? (
             <section>
-              <div className="modal-section-title">Languages</div>
+              <div className="modal-section-title">{t("repoDetails.languages")}</div>
               <div className="repo-detail-languages">
                 {languages.map(([name, bytes]) => <span key={name}><i style={{ background: getLanguageColor(name) }} />{name}<em>{formatNumber(bytes)}</em></span>)}
               </div>
@@ -803,17 +863,17 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
 
           {activeTab === "overview" ? (
             <section>
-              <div className="modal-section-title">Repository trend</div>
+              <div className="modal-section-title">{t("repoDetails.repositoryTrend")}</div>
               <div className="repo-chart-grid">
-                <MiniChart title="Stars" values={starHistory} tone="amber" />
-                <MiniChart title="Forks" values={forkHistory} tone="purple" />
+                <MiniChart title={t("repoDetails.stars")} values={starHistory} tone="amber" />
+                <MiniChart title={t("repoDetails.forks")} values={forkHistory} tone="purple" />
               </div>
             </section>
           ) : null}
 
           {activeTab === "mentions" ? <section>
             <div className="modal-section-title section-title-with-count">
-              <span>Previous names</span>
+              <span>{t("repoDetails.previousNames")}</span>
               <strong>{formatNumber(aliases.length)}</strong>
             </div>
             <p className="modal-empty sub" style={{ marginTop: 0 }}>
@@ -846,15 +906,15 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                 disabled={aliasBusy}
                 spellCheck={false}
               />
-              <button type="submit" disabled={aliasBusy || !aliasInput.trim()}>Add</button>
+              <button type="submit" disabled={aliasBusy || !aliasInput.trim()}>{t("repoDetails.add")}</button>
             </form>
             {aliasError ? <div className="modal-error" style={{ marginTop: 8 }}>{aliasError}</div> : null}
           </section> : null}
 
           {activeTab === "mentions" ? <section>
             <div className="modal-section-title section-title-with-count">
-              <span>Mentions from other repositories</span>
-              <strong>{loading && !mentionItems.length ? "..." : formatNumber(mentionItems.length)}</strong>
+              <span>{t("repoDetails.externalMentions")}</span>
+              <strong>{loading && !mentionItems.length ? t("common.loading") : formatNumber(mentionItems.length)}</strong>
             </div>
             {pagedMentionItems.map((entry) => entry.kind === "issue" ? (
               <a className="mention-row compact" href={entry.item.url} target="_blank" rel="noreferrer" key={entry.key}>
@@ -867,7 +927,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                 <span className="mr-main"><strong>{entry.item.path}</strong><em>{entry.item.repository.nameWithOwner}</em></span>
               </a>
             ))}
-            {!loading && !mentionItems.length ? <div className="modal-empty sub">No external mentions found.</div> : null}
+            {!loading && !mentionItems.length ? <div className="modal-empty sub">{t("repoDetails.noExternalMentions")}</div> : null}
             {mentionItems.length ? (
               <Pagination
                 totalItems={mentionItems.length}
@@ -885,10 +945,10 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
 
           {activeTab === "actions" ? <section>
             <div className="modal-section-title section-title-with-count">
-              <span>GitHub Actions history</span>
-              <strong>{loading && !workflows.length ? "..." : formatNumber(workflows.length)}</strong>
+              <span>{t("repoDetails.actionsHistory")}</span>
+              <strong>{loading && !workflows.length ? t("common.loading") : formatNumber(workflows.length)}</strong>
             </div>
-            <SourceErrorBanner label="Workflow runs" error={detailErrors.workflows} />
+            <SourceErrorBanner label={t("repoDetails.workflowRuns")} error={detailErrors.workflows} />
             {pagedWorkflows.map((run) => {
               const state = run.conclusion || run.status;
               const startedAt = run.run_started_at || run.created_at || run.updated_at;
@@ -898,7 +958,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                   <span className="wf-main">
                     <span className="wf-title">{run.display_title || run.name || `Run #${run.run_number}`}</span>
                     <span className="wf-meta">
-                      <span>{run.name || "Workflow"}</span>
+                      <span>{run.name || t("repoDetails.workflow")}</span>
                       <span className="wf-branch">{run.head_branch || "default"}</span>
                       <span>{run.event}</span>
                       <span>#{run.run_number}</span>
@@ -908,8 +968,8 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                 </a>
               );
             })}
-            {loading && !workflows.length ? <div className="modal-empty sub">Loading workflow runs...</div> : null}
-            {!loading && !workflows.length ? <div className="modal-empty sub">No workflow runs available.</div> : null}
+            {loading && !workflows.length ? <div className="modal-empty sub">{t("repoDetails.loadingWorkflows")}</div> : null}
+            {!loading && !workflows.length ? <div className="modal-empty sub">{t("repoDetails.noWorkflows")}</div> : null}
             {workflows.length ? (
               <Pagination
                 totalItems={workflows.length}
@@ -926,22 +986,22 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
           </section> : null}
 
           {activeTab === "traffic" ? <section>
-            <div className="modal-section-title">Traffic</div>
+            <div className="modal-section-title">{t("repoDetails.traffic")}</div>
             <div className="repo-detail-traffic-grid">
               <div className="repo-detail-traffic-card">
-                <span className="repo-detail-traffic-label">Views (last 14 days)</span>
+                <span className="repo-detail-traffic-label">{t("repoDetails.views14")}</span>
                 <strong>{views ? formatNumber(views.count) : "n/a"}</strong>
-                <em>{views ? `${formatNumber(views.uniques)} unique visitors` : "Traffic data may require admin access."}</em>
+                <em>{views ? t("repoDetails.uniqueVisitors", { count: formatNumber(views.uniques) }) : t("repoDetails.trafficPermissions")}</em>
               </div>
               <div className="repo-detail-traffic-card">
-                <span className="repo-detail-traffic-label">Clones (last 14 days)</span>
+                <span className="repo-detail-traffic-label">{t("repoDetails.clones14")}</span>
                 <strong>{clones ? formatNumber(clones.count) : "n/a"}</strong>
-                <em>{clones ? `${formatNumber(clones.uniques)} unique cloners` : "Clone data may require admin access."}</em>
+                <em>{clones ? t("repoDetails.uniqueCloners", { count: formatNumber(clones.uniques) }) : t("repoDetails.clonePermissions")}</em>
               </div>
             </div>
             <div className="repo-chart-grid">
-              <MiniChart title="Views" values={viewHistory} />
-              <MiniChart title="Clones" values={cloneHistory} tone="green" />
+              <MiniChart title={t("repoDetails.views")} values={viewHistory} />
+              <MiniChart title={t("repoDetails.clones")} values={cloneHistory} tone="green" />
             </div>
             {trafficForbidden ? (
               <div className="modal-info-banner">
@@ -950,7 +1010,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
             ) : null}
             {referrers.length ? (
               <>
-                <div className="modal-section-title">Top referrers</div>
+                <div className="modal-section-title">{t("repoDetails.topReferrers")}</div>
                 <div className="repo-detail-traffic-list">
                   {referrers.map((referrer) => (
                     <div className="repo-detail-traffic-row" key={referrer.referrer}>
@@ -964,7 +1024,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
             ) : null}
             {popularPaths.length ? (
               <>
-                <div className="modal-section-title">Popular pages</div>
+                <div className="modal-section-title">{t("repoDetails.popularPages")}</div>
                 <div className="repo-detail-traffic-list">
                   {popularPaths.map((path) => (
                     <div className="repo-detail-traffic-row" key={path.path}>
@@ -980,24 +1040,25 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
 
           {activeTab === "releases" ? <section>
             <div className="modal-section-title section-title-with-count">
-              <span>Releases</span>
-              <strong>{formatNumber(releases.length)}</strong>
+              <span>{t("repoDetails.releases")}</span>
+              <strong>{releasesLoading ? t("common.loading") : formatNumber(releases.length)}</strong>
             </div>
-            <SourceErrorBanner label="Releases" error={detailErrors.releases} />
-            <div className="repo-detail-traffic-grid">
+            <SourceErrorBanner label={t("repoDetails.releases")} error={detailErrors.releases} />
+            {releasesLoading ? <div className="modal-empty sub">{t("repoDetails.loadingReleases")}</div> : null}
+            {!releasesLoading ? <div className="repo-detail-traffic-grid">
               <div className="repo-detail-traffic-card">
-                <span className="repo-detail-traffic-label">Release downloads</span>
+                <span className="repo-detail-traffic-label">{t("repoDetails.releaseDownloads")}</span>
                 <strong>{formatNumber(totalReleaseDownloads)}</strong>
-                <em>{releases.length ? `${formatNumber(releases.length)} total releases` : "No releases found."}</em>
+                <em>{releases.length ? t("repoDetails.totalReleases", { count: formatNumber(releases.length) }) : t("repoDetails.noReleasesFound")}</em>
               </div>
               <div className="repo-detail-traffic-card">
-                <span className="repo-detail-traffic-label">Latest release</span>
+                <span className="repo-detail-traffic-label">{t("repoDetails.latestRelease")}</span>
                 <strong>{(stableReleases[0] ?? releases[0])?.tag_name || "n/a"}</strong>
-                <em>{(stableReleases[0] ?? releases[0]) ? formatReleaseDate((stableReleases[0] ?? releases[0]).published_at) : "No release published."}</em>
+                <em>{(stableReleases[0] ?? releases[0]) ? formatReleaseDate((stableReleases[0] ?? releases[0]).published_at, t("repoDetails.unpublished")) : t("repoDetails.noReleasePublished")}</em>
               </div>
-            </div>
-            {releases.length ? (
-              <div className="repo-detail-release-filters" role="group" aria-label="Filter releases by type">
+            </div> : null}
+            {!releasesLoading && releases.length ? (
+              <div className="repo-detail-release-filters" role="group" aria-label={t("repoDetails.filterReleases")}>
                 {releaseFilters.filter((item) => item.key === "all" || item.count > 0).map((item) => (
                   <button
                     type="button"
@@ -1014,7 +1075,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                 ))}
               </div>
             ) : null}
-            {filteredReleases.length ? (
+            {!releasesLoading && filteredReleases.length ? (
               <div className="repo-detail-releases">
                 {pagedReleases.map((release) => (
                   <div className="repo-detail-release" key={release.id}>
@@ -1027,16 +1088,16 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                       <div>
                         <span className="repo-detail-release-title">
                           <strong>{release.name || release.tag_name}</strong>
-                          {release.draft ? <span className="rb draft">Draft</span> : release.prerelease ? <span className="rb prerelease">Pre-release</span> : null}
+                          {release.draft ? <span className="rb draft">{t("repoDetails.draft")}</span> : release.prerelease ? <span className="rb prerelease">{t("repoDetails.prerelease")}</span> : null}
                         </span>
-                        <span>{release.tag_name} · {formatReleaseDate(release.published_at)}</span>
+                        <span>{release.tag_name} · {formatReleaseDate(release.published_at, t("repoDetails.unpublished"))}</span>
                       </div>
-                      <span>{formatNumber(release.totalDownloads)} downloads</span>
+                      <span>{t("repoDetails.downloads", { count: formatNumber(release.totalDownloads) })}</span>
                     </button>
                     {openReleaseIds.includes(release.id) ? (
                       <div className="repo-detail-release-assets">
                         <a className="repo-detail-release-link" href={release.html_url} target="_blank" rel="noreferrer">
-                          <span>Open release on GitHub</span>
+                          <span>{t("repoDetails.openRelease")}</span>
                           <em>{release.tag_name}</em>
                         </a>
                         {release.body?.trim() ? (
@@ -1046,11 +1107,11 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                           release.assets.map((asset) => (
                             <a href={asset.browser_download_url || release.html_url} target="_blank" rel="noreferrer" key={asset.id}>
                               <span>{asset.name}</span>
-                              <em>{formatNumber(asset.download_count)} downloads · {formatBytes(asset.size || 0)}</em>
+                              <em>{t("repoDetails.downloads", { count: formatNumber(asset.download_count) })} · {formatBytes(asset.size || 0)}</em>
                             </a>
                           ))
                         ) : (
-                          <div className="modal-empty sub">No assets attached to this release.</div>
+                          <div className="modal-empty sub">{t("repoDetails.noAssets")}</div>
                         )}
                       </div>
                     ) : null}
@@ -1058,9 +1119,9 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                 ))}
               </div>
             ) : null}
-            {!loading && !releases.length ? <div className="modal-empty sub">No releases available.</div> : null}
-            {!loading && releases.length && !filteredReleases.length ? <div className="modal-empty sub">No releases in this category.</div> : null}
-            {filteredReleases.length ? (
+            {!releasesLoading && !releases.length ? <div className="modal-empty sub">{t("repoDetails.noReleasesAvailable")}</div> : null}
+            {!releasesLoading && releases.length && !filteredReleases.length ? <div className="modal-empty sub">{t("repoDetails.noReleasesCategory")}</div> : null}
+            {!releasesLoading && filteredReleases.length ? (
               <Pagination
                 totalItems={filteredReleases.length}
                 page={safeReleasesPage}
@@ -1074,10 +1135,10 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
 
           {activeTab === "commits" ? <section>
             <div className="modal-section-title section-title-with-count">
-              <span>Recent commits</span>
-              <strong>{loading && !commits.length ? "..." : formatNumber(commits.length)}</strong>
+              <span>{t("repoDetails.recentCommits")}</span>
+              <strong>{loading && !commits.length ? t("common.loading") : formatNumber(commits.length)}</strong>
             </div>
-            <SourceErrorBanner label="Commits" error={detailErrors.commits} />
+            <SourceErrorBanner label={t("repoDetails.commits")} error={detailErrors.commits} />
             {pagedCommits.map((item) => (
               <a className="commit-row" href={item.html_url} target="_blank" rel="noreferrer" key={item.sha}>
                 {item.author?.avatar_url
@@ -1086,15 +1147,15 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                 <span className="commit-main">
                   <strong>{item.commit.message.split("\n")[0]}</strong>
                   <em>
-                    {item.author?.login || item.commit.author?.name || "Unknown"}
+                    {item.author?.login || item.commit.author?.name || t("triage.unknown")}
                     {item.commit.author?.date ? ` · ${formatRelativeTime(item.commit.author.date)}` : ""}
                   </em>
                 </span>
                 <code>{item.sha.slice(0, 7)}</code>
               </a>
             ))}
-            {loading && !commits.length ? <div className="modal-empty sub">Loading commits...</div> : null}
-            {!loading && !commits.length ? <div className="modal-empty sub">No commits available.</div> : null}
+            {loading && !commits.length ? <div className="modal-empty sub">{t("repoDetails.loadingCommits")}</div> : null}
+            {!loading && !commits.length ? <div className="modal-empty sub">{t("repoDetails.noCommits")}</div> : null}
             {commits.length ? (
               <Pagination
                 totalItems={commits.length}
@@ -1109,10 +1170,10 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
 
           {activeTab === "milestones" ? <section>
             <div className="modal-section-title section-title-with-count">
-              <span>Open milestones</span>
-              <strong>{loading && !milestones.length ? "..." : formatNumber(milestones.length)}</strong>
+              <span>{t("repoDetails.openMilestones")}</span>
+              <strong>{loading && !milestones.length ? t("common.loading") : formatNumber(milestones.length)}</strong>
             </div>
-            <SourceErrorBanner label="Milestones" error={detailErrors.milestones} />
+            <SourceErrorBanner label={t("repoDetails.milestones")} error={detailErrors.milestones} />
             {pagedMilestones.map((milestone) => {
               const totalIssues = milestone.open_issues + milestone.closed_issues;
               const progress = totalIssues ? Math.round((milestone.closed_issues / totalIssues) * 100) : 0;
@@ -1131,8 +1192,8 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                 </a>
               );
             })}
-            {loading && !milestones.length ? <div className="modal-empty sub">Loading milestones...</div> : null}
-            {!loading && !milestones.length ? <div className="modal-empty sub">No open milestones.</div> : null}
+            {loading && !milestones.length ? <div className="modal-empty sub">{t("repoDetails.loadingMilestones")}</div> : null}
+            {!loading && !milestones.length ? <div className="modal-empty sub">{t("repoDetails.noMilestones")}</div> : null}
             {milestones.length ? (
               <Pagination
                 totalItems={milestones.length}
@@ -1147,8 +1208,8 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
 
           {activeTab === "branches" ? <section>
             <div className="modal-section-title section-title-with-count">
-              <span>Branches</span>
-              <strong>{branchesLoading && !branches.length ? "..." : formatNumber(branchesTotal || branches.length)}</strong>
+              <span>{t("repoDetails.branches")}</span>
+              <strong>{branchesLoading && !branches.length ? t("common.loading") : formatNumber(branchesTotal || branches.length)}</strong>
             </div>
             {branchesError ? <div className="modal-error">{branchesError}</div> : null}
             {pagedBranches.map((branch) => (
@@ -1156,23 +1217,23 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                 <span className="branch-main">
                   <span className="branch-name">
                     <code>{branch.name}</code>
-                    {branch.isDefault ? <span className="rb">Default</span> : null}
+                    {branch.isDefault ? <span className="rb">{t("repoDetails.default")}</span> : null}
                   </span>
                   <em>
-                    {branch.author || "Unknown"}
+                    {branch.author || t("triage.unknown")}
                     {branch.committedDate ? ` · ${formatRelativeTime(branch.committedDate)}` : ""}
                   </em>
                 </span>
                 {!branch.isDefault && branch.aheadOfDefault !== null && branch.behindDefault !== null ? (
-                  <span className="branch-compare" title="Commits ahead / behind the default branch">
+                  <span className="branch-compare" title={t("repoDetails.branchComparison")}>
                     <em className="ahead">+{formatNumber(branch.aheadOfDefault)}</em>
                     <em className="behind">-{formatNumber(branch.behindDefault)}</em>
                   </span>
                 ) : null}
               </div>
             ))}
-            {branchesLoading && !branches.length ? <div className="modal-empty sub">Loading branches...</div> : null}
-            {!branchesLoading && !branches.length && !branchesError ? <div className="modal-empty sub">No branches available.</div> : null}
+            {branchesLoading && !branches.length ? <div className="modal-empty sub">{t("repoDetails.loadingBranches")}</div> : null}
+            {!branchesLoading && !branches.length && !branchesError ? <div className="modal-empty sub">{t("repoDetails.noBranches")}</div> : null}
             {branches.length ? (
               <Pagination
                 totalItems={branches.length}
@@ -1187,12 +1248,12 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
 
           {activeTab === "discussions" ? <section>
             <div className="modal-section-title section-title-with-count">
-              <span>Discussions</span>
-              <strong>{discussionsLoading && !discussions.length ? "..." : formatNumber(discussionsTotal || discussions.length)}</strong>
+              <span>{t("repoDetails.discussions")}</span>
+              <strong>{discussionsLoading && !discussions.length ? t("common.loading") : formatNumber(discussionsTotal || discussions.length)}</strong>
             </div>
             {discussionsError ? <div className="modal-error">{discussionsError}</div> : null}
             {!discussionsLoading && !discussionsError && !discussionsEnabled ? (
-              <div className="modal-info-banner">Discussions are not enabled for this repository.</div>
+              <div className="modal-info-banner">{t("repoDetails.discussionsDisabled")}</div>
             ) : null}
             {pagedDiscussions.map((discussion) => (
               <a className="discussion-row" href={discussion.url} target="_blank" rel="noreferrer" key={discussion.url}>
@@ -1200,17 +1261,17 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                 <span className="discussion-main">
                   <span className="discussion-title">
                     <strong>{discussion.title}</strong>
-                    {discussion.isAnswered ? <span className="rb answered">Answered</span> : null}
+                    {discussion.isAnswered ? <span className="rb answered">{t("repoDetails.answered")}</span> : null}
                   </span>
                   <em>
                     {discussion.category ? `${discussion.category} · ` : ""}
-                    {discussion.author || "Unknown"} · {formatNumber(discussion.comments)} comments · {formatRelativeTime(discussion.updatedAt)}
+                    {discussion.author || t("triage.unknown")} · {t("list.comments", { count: formatNumber(discussion.comments) })} · {formatRelativeTime(discussion.updatedAt)}
                   </em>
                 </span>
               </a>
             ))}
-            {discussionsLoading && !discussions.length ? <div className="modal-empty sub">Loading discussions...</div> : null}
-            {!discussionsLoading && discussionsEnabled && !discussions.length && !discussionsError ? <div className="modal-empty sub">No discussions available.</div> : null}
+            {discussionsLoading && !discussions.length ? <div className="modal-empty sub">{t("repoDetails.loadingDiscussions")}</div> : null}
+            {!discussionsLoading && discussionsEnabled && !discussions.length && !discussionsError ? <div className="modal-empty sub">{t("repoDetails.noDiscussions")}</div> : null}
             {discussions.length ? (
               <Pagination
                 totalItems={discussions.length}
@@ -1225,17 +1286,17 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
 
           {activeTab === "pull-requests" ? <section>
             <div className="modal-section-title section-title-with-count">
-              <span>Open pull requests</span>
+              <span>{t("repoDetails.openPullRequests")}</span>
               <strong>{formatNumber(repoPullRequests.length)}</strong>
             </div>
             {pagedRepoPrs.map((pr) => (
               <a className="repo-detail-issue" href={pr.url} target="_blank" rel="noreferrer" key={pr.url}>
                 <span>#{pr.number}</span>
                 <strong>{pr.title}</strong>
-                <em>{pr.isDraft ? "Draft" : pr.reviewDecision?.replace("_", " ").toLowerCase() || "Review pending"} · {formatRelativeTime(pr.updatedAt)}</em>
+                <em>{pr.isDraft ? t("list.draft") : pr.reviewDecision?.replace("_", " ").toLowerCase() || t("repoDetails.reviewPending")} · {formatRelativeTime(pr.updatedAt)}</em>
               </a>
             ))}
-            {!repoPullRequests.length ? <div className="modal-empty sub">No open pull requests for this repository.</div> : null}
+            {!repoPullRequests.length ? <div className="modal-empty sub">{t("repoDetails.noPullRequests")}</div> : null}
             {repoPullRequests.length ? (
               <Pagination
                 totalItems={repoPullRequests.length}
@@ -1253,25 +1314,25 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
 
           {activeTab === "forks" ? <section>
             <div className="modal-section-title section-title-with-count">
-              <span>Forks</span>
-              <strong>{forksLoading && !forks.length ? "..." : formatNumber(forksTotal || forks.length)}</strong>
+              <span>{t("repoDetails.forks")}</span>
+              <strong>{forksLoading && !forks.length ? t("common.loading") : formatNumber(forksTotal || forks.length)}</strong>
             </div>
             <div className="repo-detail-subtoolbar">
               <label>
                 Sort
                 <select value={forkField} onChange={(event) => setForkField(event.target.value)}>
-                  <option value="PUSHED_AT">Recently pushed</option>
-                  <option value="UPDATED_AT">Recently updated</option>
-                  <option value="CREATED_AT">Recently created</option>
-                  <option value="STARGAZERS">Most stars</option>
-                  <option value="NAME">Name</option>
+                  <option value="PUSHED_AT">{t("metric.recentlyPushed")}</option>
+                  <option value="UPDATED_AT">{t("metric.recentlyUpdated")}</option>
+                  <option value="CREATED_AT">{t("repoDetails.recentlyCreated")}</option>
+                  <option value="STARGAZERS">{t("metric.mostStars")}</option>
+                  <option value="NAME">{t("common.name")}</option>
                 </select>
               </label>
               <label>
                 Direction
                 <select value={forkDirection} onChange={(event) => setForkDirection(event.target.value as "DESC" | "ASC")}>
-                  <option value="DESC">Descending</option>
-                  <option value="ASC">Ascending</option>
+                  <option value="DESC">{t("common.descending")}</option>
+                  <option value="ASC">{t("common.ascending")}</option>
                 </select>
               </label>
             </div>
@@ -1281,7 +1342,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                 <img src={fork.owner.avatarUrl} alt="" />
                 <div>
                   <div className="fr-title">{fork.nameWithOwner}</div>
-                  <div className="fr-desc">{fork.description || "No description"}</div>
+                  <div className="fr-desc">{fork.description || t("repo.noDescription")}</div>
                 </div>
                 <div className="fr-meta">
                   <span className="mini-stat"><StarIcon /> {formatNumber(fork.stargazerCount)}</span>
@@ -1290,8 +1351,8 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                 </div>
               </a>
             ))}
-            {forksLoading && !forks.length ? <div className="modal-empty sub">Loading forks...</div> : null}
-            {!forksLoading && !forks.length && !forksError ? <div className="modal-empty sub">No forks available.</div> : null}
+            {forksLoading && !forks.length ? <div className="modal-empty sub">{t("repoDetails.loadingForks")}</div> : null}
+            {!forksLoading && !forks.length && !forksError ? <div className="modal-empty sub">{t("repoDetails.noForks")}</div> : null}
             {forks.length ? (
               <Pagination
                 totalItems={forks.length}
@@ -1309,8 +1370,8 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
 
           {activeTab === "dependents" ? <section>
             <div className="modal-section-title section-title-with-count">
-              <span>Dependent repositories</span>
-              <strong>{loading && !dependents.length ? "..." : formatNumber(dependents.length)}</strong>
+              <span>{t("repoDetails.dependents")}</span>
+              <strong>{loading && !dependents.length ? t("common.loading") : formatNumber(dependents.length)}</strong>
             </div>
             {pagedDependents.map((item) => (
               <a className="dependent-row" href={item.url} target="_blank" rel="noreferrer" key={item.nameWithOwner}>
@@ -1319,7 +1380,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                 <em>★ {formatNumber(item.stars)} · forks {formatNumber(item.forks)}</em>
               </a>
             ))}
-            {!loading && !dependents.length ? <div className="modal-empty sub">No dependents available.</div> : null}
+            {!loading && !dependents.length ? <div className="modal-empty sub">{t("repoDetails.noDependents")}</div> : null}
             {dependents.length ? (
               <Pagination
                 totalItems={dependents.length}
@@ -1336,7 +1397,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
           </section> : null}
 
           {activeTab === "overview" ? <section className="repo-detail-history">
-            <div className="modal-section-title">Recent trend</div>
+            <div className="modal-section-title">{t("repoDetails.recentTrend")}</div>
             <div className="repo-detail-trend">
               <span>Stars {starsDelta === null ? "not enough history" : `${starsDelta >= 0 ? "+" : ""}${formatNumber(starsDelta)}`}</span>
               <span>Forks {forksDelta === null ? "not enough history" : `${forksDelta >= 0 ? "+" : ""}${formatNumber(forksDelta)}`}</span>
@@ -1345,7 +1406,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
 
           {activeTab === "issues" ? <section>
             <div className="modal-section-title section-title-with-count">
-              <span>Open issues in dashboard</span>
+              <span>{t("repoDetails.openIssuesDashboard")}</span>
               <strong>{formatNumber(repoIssues.length)}</strong>
             </div>
             {repoIssues.length ? pagedRepoIssues.map((issue) => (
@@ -1354,7 +1415,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, activeTab, 
                 <strong>{issue.title}</strong>
                 <em>{formatRelativeTime(issue.updatedAt)}</em>
               </a>
-            )) : <div className="modal-empty sub">No open issues for this repository.</div>}
+            )) : <div className="modal-empty sub">{t("repoDetails.noOpenIssues")}</div>}
             {repoIssues.length ? (
               <Pagination
                 totalItems={repoIssues.length}

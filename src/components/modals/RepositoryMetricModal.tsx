@@ -3,6 +3,7 @@ import { fetchForks, fetchStargazers } from "../../api/github";
 import type { ForkNode, StargazerNode } from "../../types/github";
 import { formatExactNumber, formatNumber, formatRelativeTime } from "../../utils/format";
 import { CloseIcon, ForkIcon, StarIcon } from "../common/Icons";
+import { useI18n } from "../../i18n/I18nProvider";
 
 export type MetricKind = "stars" | "forks";
 
@@ -14,6 +15,7 @@ interface RepositoryMetricModalProps {
 }
 
 export function RepositoryMetricModal({ kind, repo, totalCount, onClose }: RepositoryMetricModalProps) {
+  const { t } = useI18n();
   const [direction, setDirection] = useState<"ASC" | "DESC">("DESC");
   const [forkField, setForkField] = useState("PUSHED_AT");
   const [loading, setLoading] = useState(false);
@@ -64,27 +66,27 @@ export function RepositoryMetricModal({ kind, repo, totalCount, onClose }: Repos
           <div className="modal-title">
             <span className={`modal-icon ${kind}`}>{kind === "stars" ? <StarIcon /> : <ForkIcon />}</span>
             <div style={{ minWidth: 0 }}>
-              <div className="kind">{kind === "stars" ? "Stars" : "Forks"}</div>
+              <div className="kind">{kind === "stars" ? t("metric.stars") : t("metric.forks")}</div>
               <h3>{repo}</h3>
             </div>
           </div>
-          <button className="modal-close" aria-label="Close" onClick={onClose}><CloseIcon /></button>
+          <button className="modal-close" aria-label={t("common.close")} onClick={onClose}><CloseIcon /></button>
         </header>
         <div className="modal-toolbar">
-          <span className="modal-count"><strong>{displayedTotal === undefined ? "..." : formatExactNumber(displayedTotal)}</strong> total</span>
+          <span className="modal-count"><strong>{displayedTotal === undefined ? t("common.loading") : formatExactNumber(displayedTotal)}</strong> {t("common.total")}</span>
           <div className="spacer" style={{ flex: 1 }} />
           {kind === "forks" ? (
             <select value={forkField} onChange={(event) => setForkField(event.target.value)}>
-              <option value="PUSHED_AT">Recently pushed</option>
-              <option value="UPDATED_AT">Recently updated</option>
-              <option value="CREATED_AT">Newest</option>
-              <option value="STARGAZERS">Most stars</option>
-              <option value="NAME">Name</option>
+              <option value="PUSHED_AT">{t("metric.recentlyPushed")}</option>
+              <option value="UPDATED_AT">{t("metric.recentlyUpdated")}</option>
+              <option value="CREATED_AT">{t("metric.newest")}</option>
+              <option value="STARGAZERS">{t("metric.mostStars")}</option>
+              <option value="NAME">{t("common.name")}</option>
             </select>
           ) : null}
           <select value={direction} onChange={(event) => setDirection(event.target.value as "ASC" | "DESC")}>
-            <option value="DESC">Descending</option>
-            <option value="ASC">Ascending</option>
+            <option value="DESC">{t("common.descending")}</option>
+            <option value="ASC">{t("common.ascending")}</option>
           </select>
         </div>
         <div className={`modal-body ${loading ? "loading" : ""}`}>
@@ -101,12 +103,12 @@ export function RepositoryMetricModal({ kind, repo, totalCount, onClose }: Repos
               <img src={fork.owner.avatarUrl} alt="" />
               <div>
                 <div className="fr-title"><a href={fork.url} target="_blank" rel="noreferrer">{fork.nameWithOwner}</a></div>
-                <div className="fr-desc">{fork.description || "No description"}</div>
+                <div className="fr-desc">{fork.description || t("repo.noDescription")}</div>
               </div>
               <div className="fr-meta"><span className="mini-stat">★ {formatNumber(fork.stargazerCount)}</span><span>{formatRelativeTime(fork.pushedAt)}</span></div>
             </div>
           ))}
-          {!error && !loading && ((kind === "stars" && !stargazers.length) || (kind === "forks" && !forks.length)) ? <div className="modal-empty">No results to show.</div> : null}
+          {!error && !loading && ((kind === "stars" && !stargazers.length) || (kind === "forks" && !forks.length)) ? <div className="modal-empty">{t("metric.noResults")}</div> : null}
         </div>
       </div>
     </div>

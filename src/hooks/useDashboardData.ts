@@ -48,6 +48,7 @@ export interface DashboardDataState {
   fetchedAt: string;
   loading: boolean;
   dataStale: boolean;
+  loadedResources: ReadonlySet<DashboardResource>;
   error: string;
   loadData(resources: Set<DashboardResource>, fresh?: boolean): void;
   loadAll(fresh?: boolean): void;
@@ -73,6 +74,7 @@ export function useDashboardData(options: UseDashboardDataOptions): DashboardDat
   const [fetchedAt, setFetchedAt] = useState("");
   const [loading, setLoading] = useState(false);
   const [dataStale, setDataStale] = useState(false);
+  const [loadedResources, setLoadedResources] = useState<Set<DashboardResource>>(() => new Set());
   const [error, setError] = useState("");
   const abortControllersRef = useRef(new Set<AbortController>());
   const activeLoadsRef = useRef(0);
@@ -98,6 +100,7 @@ export function useDashboardData(options: UseDashboardDataOptions): DashboardDat
     setRepos([]);
     setOwners([]);
     setFetchedAt("");
+    setLoadedResources(new Set());
     setError("");
   }, []);
 
@@ -125,6 +128,14 @@ export function useDashboardData(options: UseDashboardDataOptions): DashboardDat
     const cachedPrs = resources.has("prs") ? peek<PullRequestsData>(CACHE_KEY.prs) : null;
     if (cachedPrs) setPullRequests(cachedPrs.pullRequests);
 
+    const cachedResources: DashboardResource[] = [];
+    if (cachedRepos) cachedResources.push("repos");
+    if (cachedIssues) cachedResources.push("issues");
+    if (cachedPrs) cachedResources.push("prs");
+    if (cachedResources.length) {
+      setLoadedResources((current) => new Set([...current, ...cachedResources]));
+    }
+
     if (!cachedRepos && !cachedIssues && !cachedPrs) {
       const persisted = readStatsCache();
       if (persisted) {
@@ -133,6 +144,14 @@ export function useDashboardData(options: UseDashboardDataOptions): DashboardDat
         setIssues(persisted.issues as GhIssue[]);
         setPullRequests(persisted.pullRequests as GhPullRequest[]);
         if (persisted.fetchedAt) setFetchedAt(persisted.fetchedAt);
+        // Non-empty persisted collections are usable immediately. Empty
+        // collections stay unresolved until the provider confirms that zero.
+        setLoadedResources((current) => new Set([
+          ...current,
+          ...(persisted.repos.length || persisted.owners.length ? ["repos" as const] : []),
+          ...(persisted.issues.length ? ["issues" as const] : []),
+          ...(persisted.pullRequests.length ? ["prs" as const] : []),
+        ]));
       }
     }
 
@@ -173,6 +192,7 @@ export function useDashboardData(options: UseDashboardDataOptions): DashboardDat
           setRepos(data.repos);
           setOwners(data.owners);
           setFetchedAt(data.fetchedAt);
+          setLoadedResources((current) => new Set(current).add("repos"));
         }
         return true;
       }, (err) => {
@@ -188,7 +208,10 @@ export function useDashboardData(options: UseDashboardDataOptions): DashboardDat
       });
       diagnostics.startResource("issues", result.source);
       void result.promise.then((data) => {
-        if (!controller.signal.aborted) setIssues(data.issues);
+        if (!controller.signal.aborted) {
+          setIssues(data.issues);
+          setLoadedResources((current) => new Set(current).add("issues"));
+        }
         return true;
       }, (err) => {
         handleFailure(err);
@@ -203,7 +226,10 @@ export function useDashboardData(options: UseDashboardDataOptions): DashboardDat
       });
       diagnostics.startResource("prs", result.source);
       void result.promise.then((data) => {
-        if (!controller.signal.aborted) setPullRequests(data.pullRequests);
+        if (!controller.signal.aborted) {
+          setPullRequests(data.pullRequests);
+          setLoadedResources((current) => new Set(current).add("prs"));
+        }
         return true;
       }, (err) => {
         handleFailure(err);
@@ -246,6 +272,7 @@ export function useDashboardData(options: UseDashboardDataOptions): DashboardDat
     fetchedAt,
     loading,
     dataStale,
+    loadedResources,
     error,
     loadData,
     loadAll,

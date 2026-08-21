@@ -1,6 +1,7 @@
 import type { GhRepo } from "../../types/github";
 import type { InboxItem } from "../../utils/inbox";
 import { TriageWorkspace } from "./TriageWorkspace";
+import { useI18n } from "../../i18n/I18nProvider";
 
 interface InboxViewProps {
   items: InboxItem[];
@@ -29,16 +30,17 @@ export function InboxView({
   onPageChange,
   onPageSizeChange,
 }: InboxViewProps) {
+  const { t } = useI18n();
   return (
     <TriageWorkspace
       className="view-inbox"
       items={items}
       title={mailboxLabel}
-      emptyTitle="No inbox items"
-      emptyMessage="Try another mailbox or clear the search."
+      emptyTitle={t("inbox.emptyTitle")}
+      emptyMessage={t("inbox.emptyMessage")}
       reposByName={reposByName}
       onRepoClick={onRepoClick}
-      searchPlaceholder="Search inbox"
+      searchPlaceholder={t("inbox.search")}
       search={search}
       hideInternalSearch
       page={page}

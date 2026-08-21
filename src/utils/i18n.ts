@@ -43,7 +43,8 @@ export function persistLanguage(storage: Pick<Storage, "setItem"> | undefined, l
 }
 
 export function translate(language: Language, key: TranslationKey, replacements: Replacements = {}): string {
-  const template = translations[language][key] ?? translations[DEFAULT_LANGUAGE][key] ?? key;
+  const locale = translations[language] as Partial<Record<TranslationKey, string>>;
+  const template = locale[key] ?? translations[DEFAULT_LANGUAGE][key] ?? key;
   return template.replace(/\{(\w+)\}/g, (match, token) => (
     Object.prototype.hasOwnProperty.call(replacements, token) ? String(replacements[token]) : match
   ));

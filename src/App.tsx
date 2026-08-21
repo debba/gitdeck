@@ -22,7 +22,7 @@ import { Footer } from "./components/Footer";
 import { TopBar } from "./components/TopBar";
 import { SidebarControls, type InboxSidebarState } from "./components/SidebarControls";
 import { Pagination } from "./components/common/Pagination";
-import { BoardIcon, BookIcon, ExportIcon, InboxIcon, IssueIcon, PulseIcon } from "./components/common/Icons";
+import { BoardIcon, BookIcon, ExportIcon, InboxIcon, IssueIcon, LoadingIcon, PulseIcon } from "./components/common/Icons";
 import { IssueList } from "./components/views/IssueList";
 import { PullRequestList } from "./components/views/PullRequestList";
 import { DailyDigestView } from "./components/views/DailyDigestView";
@@ -156,6 +156,7 @@ type AuthState = "checking" | "anonymous" | "authenticated";
 
 export function App() {
   const { t } = useI18n();
+  const countText = (value: number, ready: boolean) => ready ? formatNumber(value) : t("common.loading");
   const projectsEnabled = useCapability("projects");
   const { active: activeAccount, loading: accountsLoading } = useAccounts();
   const activeAccountId = activeAccount?.id ?? null;
@@ -181,6 +182,11 @@ export function App() {
   const [dailyDigests, setDailyDigests] = useState<DailyDigestEntry[]>([]);
   const [digestPeriod, setDigestPeriod] = useState<DigestPeriod>(() => (localStorage.getItem("gh-dash.digestPeriod") as DigestPeriod) || "day");
   const [ciHealth, setCiHealth] = useState<RepoCIHealth[]>([]);
+  const [insightsLoaded, setInsightsLoaded] = useState(false);
+  const [ciLoaded, setCiLoaded] = useState(false);
+  const [digestsLoaded, setDigestsLoaded] = useState(false);
+  const [notificationsLoaded, setNotificationsLoaded] = useState(false);
+  const [boardLoaded, setBoardLoaded] = useState(false);
   const [boardCount, setBoardCount] = useState(0);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [contributorsOpen, setContributorsOpen] = useState(false);
@@ -218,6 +224,11 @@ export function App() {
     setRepoInsights([]);
     setDailyDigests([]);
     setCiHealth([]);
+    setInsightsLoaded(false);
+    setCiLoaded(false);
+    setDigestsLoaded(false);
+    setNotificationsLoaded(false);
+    setBoardLoaded(false);
     setBoardCount(0);
     setNotifications([]);
   }, []);
@@ -229,6 +240,7 @@ export function App() {
     fetchedAt,
     loading,
     dataStale,
+    loadedResources,
     error,
     loadData,
     loadAll,
@@ -267,13 +279,17 @@ export function App() {
     if (authState !== "authenticated") return;
     if (tab !== "ci") return;
     const cached = peek<CIHealthData>(CACHE_KEY.ciHealth);
+    setCiLoaded(Boolean(cached));
     if (cached) setCiHealth(cached.repos);
     const controller = new AbortController();
     swr<CIHealthData>(CACHE_KEY.ciHealth, (signal) => fetchCIHealth(false, signal), {
       signal: controller.signal,
     }).promise
       .then((data) => {
-        if (!controller.signal.aborted) setCiHealth(data.repos);
+        if (!controller.signal.aborted) {
+          setCiHealth(data.repos);
+          setCiLoaded(true);
+        }
       })
       .catch(() => {});
     return () => controller.abort();
@@ -284,13 +300,18 @@ export function App() {
     if (tab !== "digests") return;
     const cacheKey = digestPeriod === "day" ? CACHE_KEY.digests : `${CACHE_KEY.digests}?period=${digestPeriod}`;
     const cached = peek<DailyDigestsData>(cacheKey);
+    setDigestsLoaded(Boolean(cached));
     if (cached) setDailyDigests(cached.digests);
+    else setDailyDigests([]);
     const controller = new AbortController();
     swr<DailyDigestsData>(cacheKey, (signal) => fetchDailyDigests(signal, digestPeriod), {
       signal: controller.signal,
     }).promise
       .then((data) => {
-        if (!controller.signal.aborted) setDailyDigests(data.digests);
+        if (!controller.signal.aborted) {
+          setDailyDigests(data.digests);
+          setDigestsLoaded(true);
+        }
       })
       .catch(() => {});
     return () => controller.abort();
@@ -315,6 +336,11 @@ export function App() {
     setRepoInsights([]);
     setDailyDigests([]);
     setCiHealth([]);
+    setInsightsLoaded(false);
+    setCiLoaded(false);
+    setDigestsLoaded(false);
+    setNotificationsLoaded(false);
+    setBoardLoaded(false);
     setBoardCount(0);
   }
 
@@ -380,7 +406,9 @@ export function App() {
       setNotifications(data.notifications);
       if (data.pollInterval) setPollInterval(data.pollInterval);
     } catch {
-      // silent — Inbox still works without notifications
+      // Inbox still works without provider notifications.
+    } finally {
+      setNotificationsLoaded(true);
     }
   }, []);
 
@@ -526,6 +554,7 @@ export function App() {
       ? `${CACHE_KEY.insights}?${new URLSearchParams(repoInsightTargets.map((repo) => ["repo", repo])).toString()}`
       : CACHE_KEY.insights;
     const cached = peek<RepoInsightsData>(cacheKey);
+    if (!targeted) setInsightsLoaded(Boolean(cached));
     if (cached) {
       if (!targeted) setRepoInsights(cached.insights);
       else setRepoInsights((current) => {
@@ -539,6 +568,7 @@ export function App() {
       signal: controller.signal,
     }).promise.then((data) => {
       if (controller.signal.aborted) return;
+      setInsightsLoaded(true);
       if (!targeted) setRepoInsights(data.insights);
       else setRepoInsights((current) => {
         const merged = new Map(current.map((insight) => [insight.repo, insight]));
@@ -566,6 +596,10 @@ export function App() {
   );
   const metricRepo = routeMetricKind && routeRepoName ? reposByName.get(routeRepoName) ?? null : null;
   const metricTotalCount = routeMetricKind === "stars" ? metricRepo?.stargazerCount : routeMetricKind === "forks" ? metricRepo?.forkCount : undefined;
+  const reposLoaded = loadedResources.has("repos");
+  const issuesLoaded = loadedResources.has("issues");
+  const prsLoaded = loadedResources.has("prs");
+  const inboxLoaded = reposLoaded && issuesLoaded && prsLoaded && notificationsLoaded;
 
   if (authState === "checking") {
     return <div className="auth-gate"><div className="auth-card"><p className="auth-status">{t("common.loadingEllipsis")}</p></div></div>;
@@ -591,10 +625,10 @@ export function App() {
           ? prFilters.search
           : issueFilters.search;
   const subtitle = [
-    t("summary.issues", { count: issues.length }),
-    t("summary.prs", { count: pullRequests.length }),
-    t("summary.repos", { count: repos.length }),
-    t("summary.orgs", { count: owners.length }),
+    t("summary.issues", { count: countText(issues.length, issuesLoaded) }),
+    t("summary.prs", { count: countText(pullRequests.length, prsLoaded) }),
+    t("summary.repos", { count: countText(repos.length, reposLoaded) }),
+    t("summary.orgs", { count: countText(owners.length, reposLoaded) }),
     ...(totalSecurityAlerts > 0 ? [t("summary.securityAlerts", { count: totalSecurityAlerts })] : []),
     ...(loading ? [t("summary.loading")] : []),
   ].join(" · ");
@@ -653,16 +687,16 @@ export function App() {
   }
 
   const tabs = [
-    { key: "inbox" as const, label: t("tabs.inbox"), count: issues.length + pullRequests.length, icon: <InboxIcon /> },
-    { key: "repos" as const, label: t("tabs.repositories"), count: repos.length, icon: <BookIcon /> },
-    { key: "issues" as const, label: t("tabs.issues"), count: issues.length, icon: <IssueIcon /> },
-    { key: "prs" as const, label: t("tabs.pullRequests"), count: pullRequests.length, icon: <PulseIcon /> },
-    { key: "insights" as const, label: t("tabs.insights"), count: filteredInsights.length, icon: <PulseIcon /> },
-    { key: "alerts" as const, label: t("tabs.alerts"), count: totalSecurityAlerts, icon: <PulseIcon /> },
-    { key: "ci" as const, label: t("tabs.ci"), count: ciHealth.length, icon: <PulseIcon /> },
-    { key: "digests" as const, label: t("tabs.digest"), count: dailyDigests.length, icon: <PulseIcon /> },
+    { key: "inbox" as const, label: t("tabs.inbox"), count: issues.length + pullRequests.length, ready: inboxLoaded, icon: <InboxIcon /> },
+    { key: "repos" as const, label: t("tabs.repositories"), count: repos.length, ready: reposLoaded, icon: <BookIcon /> },
+    { key: "issues" as const, label: t("tabs.issues"), count: issues.length, ready: issuesLoaded, icon: <IssueIcon /> },
+    { key: "prs" as const, label: t("tabs.pullRequests"), count: pullRequests.length, ready: prsLoaded, icon: <PulseIcon /> },
+    { key: "insights" as const, label: t("tabs.insights"), count: filteredInsights.length, ready: insightsLoaded, icon: <PulseIcon /> },
+    { key: "alerts" as const, label: t("tabs.alerts"), count: totalSecurityAlerts, ready: insightsLoaded, icon: <PulseIcon /> },
+    { key: "ci" as const, label: t("tabs.ci"), count: ciHealth.length, ready: ciLoaded, icon: <PulseIcon /> },
+    { key: "digests" as const, label: t("tabs.digest"), count: dailyDigests.length, ready: digestsLoaded, icon: <PulseIcon /> },
     ...(projectsEnabled
-      ? [{ key: "kanban" as const, label: t("tabs.board"), count: boardCount, icon: <BoardIcon /> }]
+      ? [{ key: "kanban" as const, label: t("tabs.board"), count: boardCount, ready: boardLoaded, icon: <BoardIcon /> }]
       : []),
   ];
 
@@ -706,6 +740,7 @@ export function App() {
           onClose={() => setFiltersOpen(false)}
           authLogin={authLogin || undefined}
           inbox={inboxSidebar}
+          countsLoading={!inboxLoaded}
           githubAvatars={activeAccount?.providerKind === "github"}
         />
         <main className={`main${dataStale ? " data-stale" : ""}`}>
@@ -713,9 +748,12 @@ export function App() {
           <div className="view-head">
             <div className="tabs" role="tablist">
               {tabs.map((item) => (
-                <button className={`tab ${tab === item.key ? "active" : ""}`} key={item.key} role="tab" onClick={() => navigateTab(item.key)}>
+                <button className={`tab ${tab === item.key ? "active" : ""}`} key={item.key} role="tab" aria-busy={tab === item.key && !item.ready} onClick={() => navigateTab(item.key)}>
                   {item.icon}
-                  {item.label} <span className="tab-badge">{item.count}</span>
+                  {item.label}
+                  {item.ready ? <span className="tab-badge">{formatNumber(item.count)}</span> : tab === item.key ? (
+                    <span className="tab-badge loading" title={t("common.loading")} aria-label={t("common.loading")}><LoadingIcon /></span>
+                  ) : null}
                 </button>
               ))}
             </div>
@@ -740,13 +778,13 @@ export function App() {
           {tab === "issues" ? (
             <div className="view-issues" style={{ display: "block" }}>
               <section className="stats">
-                <div className="stat"><div className="k">{t("stats.openIssues")}</div><div className="v">{formatNumber(filteredIssues.length)}</div><div className="sub">{t("stats.matchingFilters")}</div></div>
-                <div className="stat"><div className="k">{t("stats.repositories")}</div><div className="v">{new Set(filteredIssues.map((issue) => issue.repository.nameWithOwner)).size}</div><div className="sub">{t("stats.withOpenIssues")}</div></div>
-                <div className="stat"><div className="k">{t("stats.organizations")}</div><div className="v">{new Set(filteredIssues.map((issue) => issue.repository.nameWithOwner.split("/")[0])).size}</div><div className="sub">{t("stats.includingPersonal")}</div></div>
-                <div className="stat"><div className="k">{t("stats.stale30")}</div><div className="v">{filteredIssues.filter((issue) => Date.now() - new Date(issue.updatedAt).getTime() > 30 * 86_400_000).length}</div><div className="sub">{t("stats.noRecentActivity")}</div></div>
+                <div className="stat"><div className="k">{t("stats.openIssues")}</div><div className="v">{countText(filteredIssues.length, issuesLoaded)}</div><div className="sub">{t("stats.matchingFilters")}</div></div>
+                <div className="stat"><div className="k">{t("stats.repositories")}</div><div className="v">{countText(new Set(filteredIssues.map((issue) => issue.repository.nameWithOwner)).size, issuesLoaded)}</div><div className="sub">{t("stats.withOpenIssues")}</div></div>
+                <div className="stat"><div className="k">{t("stats.organizations")}</div><div className="v">{countText(new Set(filteredIssues.map((issue) => issue.repository.nameWithOwner.split("/")[0])).size, issuesLoaded)}</div><div className="sub">{t("stats.includingPersonal")}</div></div>
+                <div className="stat"><div className="k">{t("stats.stale30")}</div><div className="v">{countText(filteredIssues.filter((issue) => Date.now() - new Date(issue.updatedAt).getTime() > 30 * 86_400_000).length, issuesLoaded)}</div><div className="sub">{t("stats.noRecentActivity")}</div></div>
               </section>
               <div className="toolbar">
-                <span className="count-chip"><strong>{visibleIssues.length}</strong> {t("common.of")} <span>{filteredIssues.length}</span> {t("common.shown")}</span>
+                <span className="count-chip"><strong>{countText(visibleIssues.length, issuesLoaded)}</strong> {t("common.of")} <span>{countText(filteredIssues.length, issuesLoaded)}</span> {t("common.shown")}</span>
                 <div className="spacer" />
                 <label>{t("common.sort")}</label>
                 <select className="sort" value={issueSort} onChange={(event) => setIssueSort(event.target.value)}>
@@ -768,14 +806,14 @@ export function App() {
           {tab === "prs" ? (
             <div className="view-prs" style={{ display: "block" }}>
               <section className="stats">
-                <div className="stat"><div className="k">{t("stats.openPrs")}</div><div className="v">{formatNumber(filteredPullRequests.length)}</div><div className="sub">{t("stats.matchingFilters")}</div></div>
-                <div className="stat"><div className="k">{t("stats.drafts")}</div><div className="v">{formatNumber(draftCount)}</div><div className="sub">{t("stats.acrossAllPrs")}</div></div>
-                <div className="stat"><div className="k">{t("stats.awaitingReview")}</div><div className="v">{formatNumber(awaitingReviewCount)}</div><div className="sub">{t("stats.noReviewYet")}</div></div>
-                <div className="stat"><div className="k">{t("stats.approved")}</div><div className="v">{formatNumber(approvedCount)}</div><div className="sub">{t("stats.readyToMerge")}</div></div>
-                <div className="stat"><div className="k">{t("stats.stale14")}</div><div className="v">{formatNumber(stalePrCount)}</div><div className="sub">{t("stats.noRecentActivity")}</div></div>
+                <div className="stat"><div className="k">{t("stats.openPrs")}</div><div className="v">{countText(filteredPullRequests.length, prsLoaded)}</div><div className="sub">{t("stats.matchingFilters")}</div></div>
+                <div className="stat"><div className="k">{t("stats.drafts")}</div><div className="v">{countText(draftCount, prsLoaded)}</div><div className="sub">{t("stats.acrossAllPrs")}</div></div>
+                <div className="stat"><div className="k">{t("stats.awaitingReview")}</div><div className="v">{countText(awaitingReviewCount, prsLoaded)}</div><div className="sub">{t("stats.noReviewYet")}</div></div>
+                <div className="stat"><div className="k">{t("stats.approved")}</div><div className="v">{countText(approvedCount, prsLoaded)}</div><div className="sub">{t("stats.readyToMerge")}</div></div>
+                <div className="stat"><div className="k">{t("stats.stale14")}</div><div className="v">{countText(stalePrCount, prsLoaded)}</div><div className="sub">{t("stats.noRecentActivity")}</div></div>
               </section>
               <div className="toolbar">
-                <span className="count-chip"><strong>{visiblePullRequests.length}</strong> {t("common.of")} <span>{filteredPullRequests.length}</span> {t("common.shown")}</span>
+                <span className="count-chip"><strong>{countText(visiblePullRequests.length, prsLoaded)}</strong> {t("common.of")} <span>{countText(filteredPullRequests.length, prsLoaded)}</span> {t("common.shown")}</span>
                 <div className="spacer" />
                 <label>{t("common.preset")}</label>
                 <select className="sort" value={prFilters.preset} onChange={(event) => { setPrFilters({ ...prFilters, preset: event.target.value }); setPrPage(1); }}>
@@ -812,13 +850,13 @@ export function App() {
           {tab === "repos" ? (
             <div className="view-repos" style={{ display: "block" }}>
               <section className="stats">
-                <div className="stat"><div className="k">{t("stats.repositories")}</div><div className="v">{formatNumber(filteredRepos.length)}</div><div className="sub">{t("stats.matchingFilters")}</div></div>
-                <div className="stat"><div className="k">{t("stats.totalStars")}</div><div className="v">{formatNumber(filteredRepos.reduce((sum, repo) => sum + repo.stargazerCount, 0))}</div><div className="sub">{t("stats.acrossShown")}</div></div>
-                <div className="stat"><div className="k">{t("stats.totalForks")}</div><div className="v">{formatNumber(filteredRepos.reduce((sum, repo) => sum + repo.forkCount, 0))}</div><div className="sub">{t("stats.acrossShown")}</div></div>
-                <div className="stat"><div className="k">{t("stats.averageHealth")}</div><div className="v">{formatNumber(averageHealth)}</div><div className="sub">{t("stats.fromRepoSignals")}</div></div>
+                <div className="stat"><div className="k">{t("stats.repositories")}</div><div className="v">{countText(filteredRepos.length, reposLoaded)}</div><div className="sub">{t("stats.matchingFilters")}</div></div>
+                <div className="stat"><div className="k">{t("stats.totalStars")}</div><div className="v">{countText(filteredRepos.reduce((sum, repo) => sum + repo.stargazerCount, 0), reposLoaded)}</div><div className="sub">{t("stats.acrossShown")}</div></div>
+                <div className="stat"><div className="k">{t("stats.totalForks")}</div><div className="v">{countText(filteredRepos.reduce((sum, repo) => sum + repo.forkCount, 0), reposLoaded)}</div><div className="sub">{t("stats.acrossShown")}</div></div>
+                <div className="stat"><div className="k">{t("stats.averageHealth")}</div><div className="v">{countText(averageHealth, insightsLoaded)}</div><div className="sub">{t("stats.fromRepoSignals")}</div></div>
               </section>
               <div className="toolbar">
-                <span className="count-chip"><strong>{visibleRepos.length}</strong> {t("common.of")} <span>{filteredRepos.length}</span> {t("common.shown")}</span>
+                <span className="count-chip"><strong>{countText(visibleRepos.length, reposLoaded)}</strong> {t("common.of")} <span>{countText(filteredRepos.length, reposLoaded)}</span> {t("common.shown")}</span>
                 <div className="spacer" />
                 <label>{t("common.sort")}</label>
                 <select className="sort" value={repoSort} onChange={(event) => setRepoSort(event.target.value)}>
@@ -853,10 +891,10 @@ export function App() {
           {tab === "insights" ? (
             <div className="view-insights" style={{ display: "block" }}>
               <section className="stats">
-                <div className="stat"><div className="k">{t("stats.averageHealth")}</div><div className="v">{formatNumber(averageHealth)}</div><div className="sub">{t("stats.acrossTrackedRepos")}</div></div>
-                <div className="stat"><div className="k">{t("stats.alertCount")}</div><div className="v">{formatNumber(totalAlerts)}</div><div className="sub">{t("stats.activeRisksDetected")}</div></div>
-                <div className="stat"><div className="k">{t("stats.reposWithInsights")}</div><div className="v">{formatNumber(filteredInsights.length)}</div><div className="sub">{t("stats.alertsOpportunitiesCorrelations")}</div></div>
-                <div className="stat"><div className="k">{t("stats.atRiskRepos")}</div><div className="v">{formatNumber(repoInsights.filter((insight) => insight.healthLabel === "risky").length)}</div><div className="sub">{t("stats.healthScoreUnder55")}</div></div>
+                <div className="stat"><div className="k">{t("stats.averageHealth")}</div><div className="v">{countText(averageHealth, insightsLoaded)}</div><div className="sub">{t("stats.acrossTrackedRepos")}</div></div>
+                <div className="stat"><div className="k">{t("stats.alertCount")}</div><div className="v">{countText(totalAlerts, insightsLoaded)}</div><div className="sub">{t("stats.activeRisksDetected")}</div></div>
+                <div className="stat"><div className="k">{t("stats.reposWithInsights")}</div><div className="v">{countText(filteredInsights.length, insightsLoaded)}</div><div className="sub">{t("stats.alertsOpportunitiesCorrelations")}</div></div>
+                <div className="stat"><div className="k">{t("stats.atRiskRepos")}</div><div className="v">{countText(repoInsights.filter((insight) => insight.healthLabel === "risky").length, insightsLoaded)}</div><div className="sub">{t("stats.healthScoreUnder55")}</div></div>
               </section>
               <InsightsView insights={filteredInsights} reposByName={reposByName} onRepoClick={openRepoModal} />
             </div>
@@ -865,10 +903,10 @@ export function App() {
           {tab === "alerts" ? (
             <div className="view-alerts" style={{ display: "block" }}>
               <section className="stats">
-                <div className="stat"><div className="k">{t("alerts.totalAlerts")}</div><div className="v">{formatNumber(totalSecurityAlerts)}</div><div className="sub">{t("alerts.affectedRepos", { count: formatNumber(securityRepoCount) })}</div></div>
-                <div className="stat"><div className="k">{t("alerts.reposWithAlerts")}</div><div className="v">{formatNumber(securityRepoCount)}</div><div className="sub">{t("alerts.securityFocusedView")}</div></div>
-                <div className="stat"><div className="k">{t("stats.averageHealth")}</div><div className="v">{formatNumber(securityAverageHealth)}</div><div className="sub">{t("alerts.acrossSecurityRepos")}</div></div>
-                <div className="stat"><div className="k">{t("stats.alertCount")}</div><div className="v">{formatNumber(securityInsightsAlertCount)}</div><div className="sub">{t("alerts.repoInsightAlerts")}</div></div>
+                <div className="stat"><div className="k">{t("alerts.totalAlerts")}</div><div className="v">{countText(totalSecurityAlerts, insightsLoaded)}</div><div className="sub">{t("alerts.affectedRepos", { count: countText(securityRepoCount, insightsLoaded) })}</div></div>
+                <div className="stat"><div className="k">{t("alerts.reposWithAlerts")}</div><div className="v">{countText(securityRepoCount, insightsLoaded)}</div><div className="sub">{t("alerts.securityFocusedView")}</div></div>
+                <div className="stat"><div className="k">{t("stats.averageHealth")}</div><div className="v">{countText(securityAverageHealth, insightsLoaded)}</div><div className="sub">{t("alerts.acrossSecurityRepos")}</div></div>
+                <div className="stat"><div className="k">{t("stats.alertCount")}</div><div className="v">{countText(securityInsightsAlertCount, insightsLoaded)}</div><div className="sub">{t("alerts.repoInsightAlerts")}</div></div>
               </section>
               <InsightsView
                 insights={securityInsights}
@@ -891,10 +929,10 @@ export function App() {
               return (
                 <div className="view-ci" style={{ display: "block" }}>
                   <section className="stats">
-                    <div className="stat"><div className="k">{t("stats.reposWithCi")}</div><div className="v">{formatNumber(ciHealth.length)}</div><div className="sub">{t("stats.recentWorkflowRuns")}</div></div>
-                    <div className="stat"><div className="k">{t("stats.totalRuns")}</div><div className="v">{formatNumber(totalRuns)}</div><div className="sub">{t("stats.lastRunsPerRepo", { count: ciHealth[0]?.totalRuns ?? 30 })}</div></div>
-                    <div className="stat"><div className="k">{t("stats.avgSuccess")}</div><div className="v">{avgSuccessPct}%</div><div className="sub">{t("stats.acrossDecidedRuns")}</div></div>
-                    <div className="stat"><div className="k">{t("stats.failingRepos")}</div><div className="v">{formatNumber(failingRepos)}</div><div className="sub">{t("stats.failuresTotal", { count: formatNumber(totalFailures) })}</div></div>
+                    <div className="stat"><div className="k">{t("stats.reposWithCi")}</div><div className="v">{countText(ciHealth.length, ciLoaded)}</div><div className="sub">{t("stats.recentWorkflowRuns")}</div></div>
+                    <div className="stat"><div className="k">{t("stats.totalRuns")}</div><div className="v">{countText(totalRuns, ciLoaded)}</div><div className="sub">{t("stats.lastRunsPerRepo", { count: ciLoaded ? ciHealth[0]?.totalRuns ?? 30 : t("common.loading") })}</div></div>
+                    <div className="stat"><div className="k">{t("stats.avgSuccess")}</div><div className="v">{ciLoaded ? `${avgSuccessPct}%` : t("common.loading")}</div><div className="sub">{t("stats.acrossDecidedRuns")}</div></div>
+                    <div className="stat"><div className="k">{t("stats.failingRepos")}</div><div className="v">{countText(failingRepos, ciLoaded)}</div><div className="sub">{t("stats.failuresTotal", { count: countText(totalFailures, ciLoaded) })}</div></div>
                   </section>
                   <CIHealthView data={ciHealth} reposByName={reposByName} onRepoClick={openRepoModal} />
                 </div>
@@ -905,17 +943,17 @@ export function App() {
           {tab === "digests" ? (
             <div className="view-digests" style={{ display: "block" }}>
               <section className="stats">
-                <div className="stat"><div className="k">{digestPeriod === "day" ? t("stats.digestDays") : digestPeriod === "week" ? t("stats.digestWeeks") : t("stats.digestMonths")}</div><div className="v">{formatNumber(dailyDigests.length)}</div><div className="sub">{digestPeriod === "day" ? t("stats.daysWithSavedSnapshots") : t("stats.periodsAggregated")}</div></div>
-                <div className="stat"><div className="k">{t("stats.latestIssueDelta")}</div><div className="v">{dailyDigests[0] ? `${dailyDigests[0].issueDelta >= 0 ? "+" : ""}${formatNumber(dailyDigests[0].issueDelta)}` : "0"}</div><div className="sub">{t("stats.vsPrevious", { period: digestPeriod === "day" ? t("period.day") : t(`period.${digestPeriod}`) })}</div></div>
-                <div className="stat"><div className="k">{t("stats.latestStarsDelta")}</div><div className="v">{dailyDigests[0] ? `${dailyDigests[0].starsDelta >= 0 ? "+" : ""}${formatNumber(dailyDigests[0].starsDelta)}` : "0"}</div><div className="sub">{t("stats.vsPrevious", { period: digestPeriod === "day" ? t("period.day") : t(`period.${digestPeriod}`) })}</div></div>
-                <div className="stat"><div className="k">{t("stats.latestStaleDelta")}</div><div className="v">{dailyDigests[0] ? `${dailyDigests[0].staleIssueDelta >= 0 ? "+" : ""}${formatNumber(dailyDigests[0].staleIssueDelta)}` : "0"}</div><div className="sub">{t("stats.vsPrevious", { period: digestPeriod === "day" ? t("period.day") : t(`period.${digestPeriod}`) })}</div></div>
-                <div className="stat"><div className="k">{t("alerts.totalAlerts")}</div><div className="v">{dailyDigests[0] ? formatNumber(dailyDigests[0].securityAlertsCount) : "0"}</div><div className="sub">{dailyDigests[0] ? t("digest.securityRepos", { count: formatNumber(dailyDigests[0].securityReposCount) }) : t("digest.securityUnavailable")}</div></div>
+                <div className="stat"><div className="k">{digestPeriod === "day" ? t("stats.digestDays") : digestPeriod === "week" ? t("stats.digestWeeks") : t("stats.digestMonths")}</div><div className="v">{countText(dailyDigests.length, digestsLoaded)}</div><div className="sub">{digestPeriod === "day" ? t("stats.daysWithSavedSnapshots") : t("stats.periodsAggregated")}</div></div>
+                <div className="stat"><div className="k">{t("stats.latestIssueDelta")}</div><div className="v">{!digestsLoaded ? t("common.loading") : dailyDigests[0] ? `${dailyDigests[0].issueDelta >= 0 ? "+" : ""}${formatNumber(dailyDigests[0].issueDelta)}` : "0"}</div><div className="sub">{t("stats.vsPrevious", { period: digestPeriod === "day" ? t("period.day") : t(`period.${digestPeriod}`) })}</div></div>
+                <div className="stat"><div className="k">{t("stats.latestStarsDelta")}</div><div className="v">{!digestsLoaded ? t("common.loading") : dailyDigests[0] ? `${dailyDigests[0].starsDelta >= 0 ? "+" : ""}${formatNumber(dailyDigests[0].starsDelta)}` : "0"}</div><div className="sub">{t("stats.vsPrevious", { period: digestPeriod === "day" ? t("period.day") : t(`period.${digestPeriod}`) })}</div></div>
+                <div className="stat"><div className="k">{t("stats.latestStaleDelta")}</div><div className="v">{!digestsLoaded ? t("common.loading") : dailyDigests[0] ? `${dailyDigests[0].staleIssueDelta >= 0 ? "+" : ""}${formatNumber(dailyDigests[0].staleIssueDelta)}` : "0"}</div><div className="sub">{t("stats.vsPrevious", { period: digestPeriod === "day" ? t("period.day") : t(`period.${digestPeriod}`) })}</div></div>
+                <div className="stat"><div className="k">{t("alerts.totalAlerts")}</div><div className="v">{!digestsLoaded ? t("common.loading") : dailyDigests[0] ? formatNumber(dailyDigests[0].securityAlertsCount) : "0"}</div><div className="sub">{!digestsLoaded ? t("common.loading") : dailyDigests[0] ? t("digest.securityRepos", { count: formatNumber(dailyDigests[0].securityReposCount) }) : t("digest.securityUnavailable")}</div></div>
               </section>
               <DailyDigestView digests={dailyDigests} period={digestPeriod} onPeriodChange={setDigestPeriod} />
             </div>
           ) : null}
 
-          {tab === "kanban" && projectsEnabled ? <KanbanView onCountChange={setBoardCount} /> : null}
+          {tab === "kanban" && projectsEnabled ? <KanbanView onCountChange={(count) => { setBoardCount(count); setBoardLoaded(true); }} /> : null}
         </main>
       </div>
       <Footer
@@ -954,6 +992,8 @@ export function App() {
           repo={repoModal}
           issues={issues}
           pullRequests={pullRequests}
+          issuesLoaded={issuesLoaded}
+          pullRequestsLoaded={prsLoaded}
           activeTab={repoDetailTab}
           onTabChange={changeRepoDetailTab}
           onClose={closeRepoModal}

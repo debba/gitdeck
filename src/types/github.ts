@@ -310,7 +310,16 @@ export interface RepoDetailsData {
   commits?: RepoCommit[];
   milestones?: RepoMilestone[];
   community?: RepoCommunityProfile | null;
-  counts?: { branches: number | null; discussions: number | null };
+  counts?: {
+    actions: number | null;
+    branches: number | null;
+    commits: number | null;
+    discussions: number | null;
+    issues: number | null;
+    milestones: number | null;
+    pullRequests: number | null;
+    releases: number | null;
+  };
   errors?: Record<string, string | null>;
 }
 
