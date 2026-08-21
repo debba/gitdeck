@@ -1,3 +1,17 @@
+## [1.0.7](https://github.com/debba/gitdeck/compare/v1.0.6...v1.0.7) (2026-08-21)
+
+
+### Bug Fixes
+
+* keep sidebar filter options stable ([8773e4e](https://github.com/debba/gitdeck/commit/8773e4e698813866b773860f160e12af0850b233))
+
+
+### Features
+
+* combine included and excluded authors ([2886db8](https://github.com/debba/gitdeck/commit/2886db8cddee93da75b6b8b72284d2382c632d52))
+* improve localized loading states ([8a8568b](https://github.com/debba/gitdeck/commit/8a8568bd98ac583a4a26a709bb34955153b07925))
+* support excluding issue and PR authors ([925efb5](https://github.com/debba/gitdeck/commit/925efb5b548de8d014cad268f10eb5c22c9044ff))
+
 ## [1.0.5](https://github.com/debba/gh-dashboard/compare/v1.0.4...v1.0.5) (2026-07-27)
 
 
