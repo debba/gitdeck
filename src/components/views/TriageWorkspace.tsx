@@ -17,6 +17,7 @@ import {
   RefreshIcon,
   SearchIcon,
 } from "../common/Icons";
+import { useI18n } from "../../i18n/I18nProvider";
 
 type Density = "compact" | "cozy" | "comfortable";
 
@@ -50,8 +51,8 @@ interface TriageWorkspaceProps {
   onPageSizeChange?: (size: number) => void;
 }
 
-function kindLabel(item: InboxItem): string {
-  return item.kind === "pull-request" ? "PR" : "Issue";
+function kindLabel(item: InboxItem, issueLabel: string): string {
+  return item.kind === "pull-request" ? "PR" : issueLabel;
 }
 
 function primaryReason(item: InboxItem): string {
@@ -75,7 +76,8 @@ function PropertyRow({ label, children }: { label: string; children: ReactNode }
 }
 
 function LabelPills({ item }: { item: InboxItem }) {
-  if (!item.labels.length) return <span className="inbox-muted">None</span>;
+  const { t } = useI18n();
+  if (!item.labels.length) return <span className="inbox-muted">{t("common.none")}</span>;
   return (
     <div className="inbox-labels">
       {item.labels.map((label) => {
@@ -102,12 +104,13 @@ interface TriagePreviewProps {
 }
 
 function TriagePreview({ item, repo, onRepoClick, onMarkRead }: TriagePreviewProps) {
+  const { t } = useI18n();
   if (!item) {
     return (
       <section className="inbox-reader empty-reader">
         <div>
-          <strong>No item selected</strong>
-          <span>Select an issue or pull request from the list.</span>
+          <strong>{t("triage.noSelection")}</strong>
+          <span>{t("triage.selectPrompt")}</span>
         </div>
       </section>
     );
@@ -125,32 +128,32 @@ function TriagePreview({ item, repo, onRepoClick, onMarkRead }: TriagePreviewPro
         <div className="inbox-reader-from">
           <Avatar login={item.author?.login} avatarUrl={item.author?.avatarUrl} size={48} />
           <div className="inbox-reader-from-meta">
-            <strong>{item.author?.login || "Unknown"}</strong>
+            <strong>{item.author?.login || t("triage.unknown")}</strong>
             <span>
               {item.repository.nameWithOwner} · #{item.number} · {item.status}
             </span>
-            <span className="inbox-reader-time">Updated {formatRelativeTime(item.updatedAt)}</span>
+            <span className="inbox-reader-time">{t("common.updatedAt", { time: formatRelativeTime(item.updatedAt) })}</span>
           </div>
-          {item.unread ? <span className="inbox-unread-pill">Unread</span> : null}
+          {item.unread ? <span className="inbox-unread-pill">{t("triage.unread")}</span> : null}
         </div>
         <h2>{item.title}</h2>
         <div className="inbox-actions">
-          <a className="btn primary" href={item.url} target="_blank" rel="noreferrer" onClick={handleOpen}>Open on GitHub</a>
+          <a className="btn primary" href={item.url} target="_blank" rel="noreferrer" onClick={handleOpen}>{t("common.openOnGitHub")}</a>
           {item.unread && item.notificationThreadId && onMarkRead ? (
             <button className="btn" type="button" onClick={() => onMarkRead(item.notificationThreadId!)}>
-              <CheckIcon /> Mark as read
+              <CheckIcon /> {t("triage.markAsRead")}
             </button>
           ) : null}
           {repo && onRepoClick ? (
             <button className="btn" type="button" onClick={() => onRepoClick(repo)}>
-              <BookIcon /> Repository
+              <BookIcon /> {t("triage.repository")}
             </button>
           ) : null}
         </div>
       </header>
 
       <div className="inbox-reader-section">
-        <h3>Why this needs attention</h3>
+        <h3>{t("triage.attention")}</h3>
         <div className="inbox-reasons expanded">
           {item.reasons.map((itemReason) => (
             <span className={`inbox-reason tone-${itemReason.tone}`} key={`${item.id}-${itemReason.code}`}>
@@ -161,22 +164,22 @@ function TriagePreview({ item, repo, onRepoClick, onMarkRead }: TriagePreviewPro
       </div>
 
       <div className="inbox-reader-section">
-        <h3>Context</h3>
+        <h3>{t("triage.context")}</h3>
         <div className="inbox-context-grid">
           <div>
-            <span>Comments</span>
+            <span>{t("triage.comments")}</span>
             <strong>{formatNumber(item.commentsCount)}</strong>
           </div>
           <div>
-            <span>Attention score</span>
+            <span>{t("triage.attentionScore")}</span>
             <strong>{formatNumber(item.score)}</strong>
           </div>
           <div>
-            <span>Created</span>
+            <span>{t("triage.created")}</span>
             <strong>{formatRelativeTime(item.createdAt)}</strong>
           </div>
           <div>
-            <span>Updated</span>
+            <span>{t("triage.updated")}</span>
             <strong>{formatRelativeTime(item.updatedAt)}</strong>
           </div>
         </div>
@@ -184,12 +187,12 @@ function TriagePreview({ item, repo, onRepoClick, onMarkRead }: TriagePreviewPro
 
       {item.branch || item.diff ? (
         <div className="inbox-reader-section">
-          <h3>Pull request details</h3>
+          <h3>{t("triage.prDetails")}</h3>
           <div className="inbox-pr-detail">
             {item.branch ? <span>{item.branch.head} {"->"} {item.branch.base}</span> : null}
             {item.diff ? (
               <span>
-                +{formatNumber(item.diff.additions)} -{formatNumber(item.diff.deletions)} across {formatNumber(item.diff.changedFiles)} files
+                {t("triage.filesChanged", { additions: formatNumber(item.diff.additions), deletions: formatNumber(item.diff.deletions), files: formatNumber(item.diff.changedFiles) })}
               </span>
             ) : null}
           </div>
@@ -200,29 +203,30 @@ function TriagePreview({ item, repo, onRepoClick, onMarkRead }: TriagePreviewPro
 }
 
 function TriageProperties({ item }: { item: InboxItem | undefined }) {
+  const { t } = useI18n();
   return (
     <aside className="inbox-properties">
       <div className="inbox-properties-head">
-        <strong>Properties</strong>
+        <strong>{t("triage.properties")}</strong>
       </div>
       {item ? (
         <>
-          <PropertyRow label="Type"><span className={`inbox-kind ${item.kind}`}>{kindLabel(item)}</span></PropertyRow>
-          <PropertyRow label="Status">{item.status}</PropertyRow>
-          <PropertyRow label="Score"><span className={`inbox-score tone-${scoreTone(item)}`}>{formatNumber(item.score)}</span></PropertyRow>
-          <PropertyRow label="Repository">{item.repository.nameWithOwner}</PropertyRow>
-          <PropertyRow label="Author">{item.author?.login || "Unknown"}</PropertyRow>
-          <PropertyRow label="Assignees">{item.assignees.length ? item.assignees.map((assignee) => assignee.login).join(", ") : "None"}</PropertyRow>
-          <PropertyRow label="Created">{new Date(item.createdAt).toLocaleDateString()}</PropertyRow>
-          <PropertyRow label="Updated">{new Date(item.updatedAt).toLocaleDateString()}</PropertyRow>
-          {item.branch ? <PropertyRow label="Branch">{item.branch.head} {"->"} {item.branch.base}</PropertyRow> : null}
+          <PropertyRow label={t("triage.type")}><span className={`inbox-kind ${item.kind}`}>{kindLabel(item, t("list.issue"))}</span></PropertyRow>
+          <PropertyRow label={t("triage.status")}>{item.status}</PropertyRow>
+          <PropertyRow label={t("triage.score")}><span className={`inbox-score tone-${scoreTone(item)}`}>{formatNumber(item.score)}</span></PropertyRow>
+          <PropertyRow label={t("triage.repository")}>{item.repository.nameWithOwner}</PropertyRow>
+          <PropertyRow label={t("triage.author")}>{item.author?.login || t("triage.unknown")}</PropertyRow>
+          <PropertyRow label={t("triage.assignees")}>{item.assignees.length ? item.assignees.map((assignee) => assignee.login).join(", ") : t("common.none")}</PropertyRow>
+          <PropertyRow label={t("triage.created")}>{new Date(item.createdAt).toLocaleDateString()}</PropertyRow>
+          <PropertyRow label={t("triage.updated")}>{new Date(item.updatedAt).toLocaleDateString()}</PropertyRow>
+          {item.branch ? <PropertyRow label={t("triage.branch")}>{item.branch.head} {"->"} {item.branch.base}</PropertyRow> : null}
           <div className="inbox-property-block">
-            <span>Labels</span>
+            <span>{t("triage.labels")}</span>
             <LabelPills item={item} />
           </div>
         </>
       ) : (
-        <div className="inbox-properties-empty">Select an item to inspect its properties.</div>
+        <div className="inbox-properties-empty">{t("triage.selectProperties")}</div>
       )}
     </aside>
   );
@@ -237,7 +241,7 @@ export function TriageWorkspace({
   onRepoClick,
   sidebar,
   className = "",
-  searchPlaceholder = "Search",
+  searchPlaceholder,
   onMarkRead,
   onRefresh,
   search: searchProp,
@@ -248,6 +252,7 @@ export function TriageWorkspace({
   onPageChange,
   onPageSizeChange,
 }: TriageWorkspaceProps) {
+  const { t } = useI18n();
   const [internalSearch, setInternalSearch] = useState("");
   const search = searchProp !== undefined ? searchProp : internalSearch;
   const setSearch = onSearchChange ?? setInternalSearch;
@@ -399,7 +404,7 @@ export function TriageWorkspace({
         <header className="inbox-list-head">
           <div className="inbox-list-title">
             <strong>{title}</strong>
-            <span>{formatNumber(visibleItems.length)} items</span>
+            <span>{formatNumber(visibleItems.length)} {t("common.items")}</span>
           </div>
           {hideInternalSearch ? null : (
             <label className="inbox-search">
@@ -409,12 +414,12 @@ export function TriageWorkspace({
                 type="search"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder={searchPlaceholder}
+                placeholder={searchPlaceholder ?? t("common.search")}
               />
             </label>
           )}
           <div className="inbox-toolbar">
-            <label className="inbox-checkbox" title="Select all">
+            <label className="inbox-checkbox" title={t("triage.selectAll")}>
               <input
                 type="checkbox"
                 checked={allChecked}
@@ -424,27 +429,27 @@ export function TriageWorkspace({
             </label>
             {checked.size ? (
               <>
-                <span className="inbox-toolbar-count">{checked.size} selected</span>
+                <span className="inbox-toolbar-count">{t("triage.selected", { count: checked.size })}</span>
                 {checkedItems.length && onMarkRead ? (
                   <button className="btn ghost" type="button" onClick={markChecked}>
-                    <CheckIcon /> Mark {checkedItems.length} as read
+                    <CheckIcon /> {t("triage.markCountRead", { count: checkedItems.length })}
                   </button>
                 ) : null}
-                <button className="btn ghost" type="button" onClick={clearChecked}>Clear</button>
+                <button className="btn ghost" type="button" onClick={clearChecked}>{t("common.clear")}</button>
               </>
             ) : (
-              <span className="inbox-toolbar-count muted">Tip: press <kbd>?</kbd> for shortcuts</span>
+              <span className="inbox-toolbar-count muted">{t("triage.shortcutTip")}</span>
             )}
             <span className="inbox-toolbar-spacer" />
             {onRefresh ? (
-              <button className="icon-btn" type="button" onClick={onRefresh} title="Refresh">
+              <button className="icon-btn" type="button" onClick={onRefresh} title={t("common.refresh")}>
                 <RefreshIcon />
               </button>
             ) : null}
-            <button className="icon-btn" type="button" onClick={cycleDensity} title={`Density: ${density}`}>
+            <button className="icon-btn" type="button" onClick={cycleDensity} title={t("triage.density", { density })}>
               <DensityIcon />
             </button>
-            <button className="icon-btn" type="button" onClick={() => setShortcutsOpen((prev) => !prev)} title="Shortcuts">
+            <button className="icon-btn" type="button" onClick={() => setShortcutsOpen((prev) => !prev)} title={t("triage.shortcuts")}>
               <KeyboardIcon />
             </button>
           </div>
@@ -487,7 +492,7 @@ export function TriageWorkspace({
                 <Avatar login={item.author?.login} avatarUrl={item.author?.avatarUrl} size={density === "compact" ? 28 : 36} />
                 <div className="inbox-row-body">
                   <div className="inbox-row-top">
-                    <strong className="inbox-row-author">{item.author?.login || "Unknown"}</strong>
+                    <strong className="inbox-row-author">{item.author?.login || t("triage.unknown")}</strong>
                     <span className="inbox-row-repo">{item.repository.nameWithOwner}</span>
                     <span className="inbox-row-num">#{item.number}</span>
                     <em>{formatRelativeTime(item.updatedAt)}</em>
@@ -497,10 +502,10 @@ export function TriageWorkspace({
                     <div className="inbox-row-meta">
                       <span className={`inbox-kind ${item.kind}`}>
                         {item.kind === "pull-request" ? <PulseIcon /> : <IssueIcon />}
-                        {kindLabel(item)}
+                        {kindLabel(item, t("list.issue"))}
                       </span>
                       <span className="inbox-row-summary">{primaryReason(item)}</span>
-                      <span className="inbox-row-comments">{formatNumber(item.commentsCount)} comments</span>
+                      <span className="inbox-row-comments">{t("list.comments", { count: formatNumber(item.commentsCount) })}</span>
                     </div>
                   ) : null}
                 </div>
@@ -534,17 +539,17 @@ export function TriageWorkspace({
       {shortcutsOpen ? (
         <div className="inbox-shortcuts" role="dialog" onClick={() => setShortcutsOpen(false)}>
           <div className="inbox-shortcuts-card" onClick={(event) => event.stopPropagation()}>
-            <strong>Keyboard shortcuts</strong>
+            <strong>{t("triage.keyboardShortcuts")}</strong>
             <dl>
-              <div><dt><kbd>j</kbd> / <kbd>k</kbd></dt><dd>Next / previous item</dd></div>
-              <div><dt><kbd>Enter</kbd></dt><dd>Open on GitHub</dd></div>
-              <div><dt><kbd>e</kbd></dt><dd>Mark active as read</dd></div>
-              <div><dt><kbd>x</kbd></dt><dd>Toggle selection</dd></div>
-              <div><dt><kbd>/</kbd></dt><dd>Focus search</dd></div>
-              <div><dt><kbd>Esc</kbd></dt><dd>Clear selection / blur search</dd></div>
-              <div><dt><kbd>?</kbd></dt><dd>Toggle this help</dd></div>
+              <div><dt><kbd>j</kbd> / <kbd>k</kbd></dt><dd>{t("triage.nextPrevious")}</dd></div>
+              <div><dt><kbd>Enter</kbd></dt><dd>{t("common.openOnGitHub")}</dd></div>
+              <div><dt><kbd>e</kbd></dt><dd>{t("triage.markRead")}</dd></div>
+              <div><dt><kbd>x</kbd></dt><dd>{t("triage.toggleSelection")}</dd></div>
+              <div><dt><kbd>/</kbd></dt><dd>{t("triage.focusSearch")}</dd></div>
+              <div><dt><kbd>Esc</kbd></dt><dd>{t("triage.clearSelection")}</dd></div>
+              <div><dt><kbd>?</kbd></dt><dd>{t("triage.toggleHelp")}</dd></div>
             </dl>
-            <button className="btn" type="button" onClick={() => setShortcutsOpen(false)}>Close</button>
+            <button className="btn" type="button" onClick={() => setShortcutsOpen(false)}>{t("common.close")}</button>
           </div>
         </div>
       ) : null}

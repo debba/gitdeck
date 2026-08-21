@@ -92,6 +92,15 @@ query($owner:String!, $name:String!) {
   repository(owner:$owner, name:$name) {
     refs(refPrefix:"refs/heads/", first:1) { totalCount }
     discussions(first:1) { totalCount }
+    issues(states:OPEN, first:1) { totalCount }
+    pullRequests(states:OPEN, first:1) { totalCount }
+    milestones(states:OPEN, first:1) { totalCount }
+    releases(first:1) { totalCount }
+    defaultBranchRef {
+      target {
+        ... on Commit { history(first:1) { totalCount } }
+      }
+    }
   }
 }`;
 
@@ -865,22 +874,47 @@ async function handleRepoDetails(res: ServerResponse, u: URL): Promise<void> {
     return restApiPaginate(`/repos/${repo}/releases?per_page=100`);
   }
 
-  async function fetchRepoCounts(): Promise<{ branches: number | null; discussions: number | null }> {
+  async function fetchRepoCounts() {
+    const unavailable = {
+      actions: null,
+      branches: null,
+      commits: null,
+      discussions: null,
+      issues: null,
+      milestones: null,
+      pullRequests: null,
+      releases: null,
+    };
     const rp = parseRepo(repo);
-    if (!rp) return { branches: null, discussions: null };
+    if (!rp) return unavailable;
     try {
-      const data = await gql<{
-        repository: {
-          refs: { totalCount: number } | null;
-          discussions: { totalCount: number };
-        };
-      }>(REPO_COUNTS_QUERY, { owner: rp[0], name: rp[1] });
+      const [data, actions] = await Promise.all([
+        gql<{
+          repository: {
+            refs: { totalCount: number } | null;
+            discussions: { totalCount: number } | null;
+            issues: { totalCount: number };
+            pullRequests: { totalCount: number };
+            milestones: { totalCount: number };
+            releases: { totalCount: number };
+            defaultBranchRef: { target: { history?: { totalCount: number } } | null } | null;
+          };
+        }>(REPO_COUNTS_QUERY, { owner: rp[0], name: rp[1] }),
+        ghApiJson(`/repos/${repo}/actions/runs?per_page=1`),
+      ]);
+      const actionData = actions.ok ? actions.data as { total_count?: number } : null;
       return {
+        actions: actionData?.total_count ?? null,
         branches: data.repository.refs?.totalCount ?? null,
-        discussions: data.repository.discussions.totalCount,
+        commits: data.repository.defaultBranchRef?.target?.history?.totalCount ?? null,
+        discussions: data.repository.discussions?.totalCount ?? null,
+        issues: data.repository.issues.totalCount,
+        milestones: data.repository.milestones.totalCount,
+        pullRequests: data.repository.pullRequests.totalCount,
+        releases: data.repository.releases.totalCount,
       };
     } catch {
-      return { branches: null, discussions: null };
+      return unavailable;
     }
   }
 
@@ -897,7 +931,16 @@ async function handleRepoDetails(res: ServerResponse, u: URL): Promise<void> {
     section === "overview" ? fetchRepoSecuritySummary(repo) : Promise.resolve(null),
     section === "milestones" ? ghApiJson(`/repos/${repo}/milestones?state=open&per_page=100&sort=due_on&direction=asc`) : emptyResult([]),
     section === "overview" ? ghApiJson(`/repos/${repo}/community/profile`) : emptyResult(null),
-    section === "overview" ? fetchRepoCounts() : Promise.resolve({ branches: null, discussions: null }),
+    section === "minimal" ? fetchRepoCounts() : Promise.resolve({
+      actions: null,
+      branches: null,
+      commits: null,
+      discussions: null,
+      issues: null,
+      milestones: null,
+      pullRequests: null,
+      releases: null,
+    }),
   ]);
 
   const normalizedReleases = releases.ok

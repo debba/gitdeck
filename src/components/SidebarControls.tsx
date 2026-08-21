@@ -45,6 +45,7 @@ interface SidebarControlsProps {
   onClose: () => void;
   authLogin?: string;
   inbox?: InboxSidebarState;
+  countsLoading?: boolean;
   githubAvatars?: boolean;
 }
 
@@ -172,6 +173,7 @@ export function SidebarControls({
   onClose,
   authLogin,
   inbox,
+  countsLoading = false,
   githubAvatars = true,
 }: SidebarControlsProps) {
   const { t } = useI18n();
@@ -193,7 +195,7 @@ export function SidebarControls({
       <aside className="sidebar inbox-sidebar" id="sidebar">
         <div className="side-head inbox-side-head">
           <h2>{t("sidebar.mailboxes")}</h2>
-          <span className="mailbox-total" aria-label={`${t("sidebar.mailboxes")}: ${formatNumber(inbox.totalCount)}`}>{formatNumber(inbox.totalCount)}</span>
+          <span className="mailbox-total" aria-label={`${t("sidebar.mailboxes")}: ${countsLoading ? t("common.loading") : formatNumber(inbox.totalCount)}`}>{countsLoading ? t("common.loading") : formatNumber(inbox.totalCount)}</span>
           <button className="side-close" aria-label={t("common.closeFilters")} onClick={onClose}><CloseIcon /></button>
         </div>
         <div className="search-wrap">
@@ -208,14 +210,14 @@ export function SidebarControls({
             const active = inbox.mailbox === entry.key;
             return (
               <button
-                className={`mailbox-item${active ? " active" : ""}${count === 0 ? " empty" : ""}`}
+                className={`mailbox-item${active ? " active" : ""}${!countsLoading && count === 0 ? " empty" : ""}`}
                 key={entry.key}
                 type="button"
                 aria-pressed={active}
                 onClick={() => inbox.onMailboxChange(entry.key)}
               >
                 <span>{t(`mailbox.${entry.key}`)}</span>
-                <strong>{formatNumber(count)}</strong>
+                <strong>{countsLoading ? t("common.loading") : formatNumber(count)}</strong>
               </button>
             );
           })}

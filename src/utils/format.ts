@@ -58,7 +58,13 @@ const RELATIVE_TIME_LABELS: Record<Language, {
   },
 };
 
-export function formatRelativeTime(iso: string, now = Date.now(), language: Language = "en"): string {
+function currentLanguage(): Language {
+  if (typeof document === "undefined") return "en";
+  const language = document.documentElement.lang.split("-")[0] as Language;
+  return language in RELATIVE_TIME_LABELS ? language : "en";
+}
+
+export function formatRelativeTime(iso: string, now = Date.now(), language: Language = currentLanguage()): string {
   if (!iso) return "";
   const date = new Date(iso);
   const diff = now - date.getTime();
@@ -83,10 +89,10 @@ export function formatNumber(value: number): string {
 }
 
 export function formatExactNumber(value: number): string {
-  return new Intl.NumberFormat("en-US").format(value);
+  return new Intl.NumberFormat(currentLanguage()).format(value);
 }
 
-export function formatReadableDate(iso: string, locale = "en-US"): string {
+export function formatReadableDate(iso: string, locale = currentLanguage()): string {
   if (!iso) return "";
   const date = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(`${iso}T12:00:00Z`) : new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;

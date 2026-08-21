@@ -501,6 +501,14 @@
     font-variant-numeric: tabular-nums;
   }
   .tab:not(.active) .tab-badge { background: var(--panel-2); color: var(--muted); border: 1px solid var(--border-soft); }
+  .tab .tab-badge.loading {
+    display: inline-grid;
+    place-items: center;
+    padding: 2px 5px;
+  }
+  .loading-icon { animation: loading-icon-spin .8s linear infinite; }
+  @keyframes loading-icon-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .loading-icon { animation: none; } }
 
   /* Mobile: icon-only tabs — stretch full width, reveal label on hover */
   @media (max-width: 640px) {

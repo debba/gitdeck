@@ -74,6 +74,18 @@ afterEach(async () => {
 });
 
 describe("useDashboardData lazy loading", () => {
+  it("keeps a resource unresolved until a zero result has actually loaded", async () => {
+    let resolveIssues!: (value: typeof issuesResult) => void;
+    api.fetchIssues.mockImplementationOnce(() => new Promise((resolve) => { resolveIssues = resolve; }));
+
+    await render({ tab: "issues" });
+    expect(latest.loadedResources.has("issues")).toBe(false);
+
+    await act(async () => resolveIssues(issuesResult));
+    expect(latest.loadedResources.has("issues")).toBe(true);
+    expect(latest.issues).toEqual([]);
+  });
+
   it("loads only resources required by the active tab", async () => {
     await render({ tab: "repos" });
     expect(api.fetchRepos).toHaveBeenCalledTimes(1);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CloseIcon } from "../common/Icons";
 import { formatNumber } from "../../utils/format";
+import { useI18n } from "../../i18n/I18nProvider";
 
 interface ContributorsModalProps {
   onClose: () => void;
@@ -17,6 +18,7 @@ interface Contributor {
 const REPO = "debba/gh-dashboard";
 
 export function ContributorsModal({ onClose }: ContributorsModalProps) {
+  const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [contributors, setContributors] = useState<Contributor[]>([]);
@@ -49,19 +51,19 @@ export function ContributorsModal({ onClose }: ContributorsModalProps) {
           <div className="modal-title">
             <span className="modal-icon repository">★</span>
             <div style={{ minWidth: 0 }}>
-              <div className="kind">Contributors</div>
+              <div className="kind">{t("footer.contributors")}</div>
               <h3>{REPO}</h3>
             </div>
           </div>
-          <button className="modal-close" aria-label="Close" onClick={onClose}><CloseIcon /></button>
+          <button className="modal-close" aria-label={t("common.close")} onClick={onClose}><CloseIcon /></button>
         </header>
         <div className="modal-toolbar">
           <span className="modal-count">
-            <strong>{loading ? "..." : formatNumber(contributors.length)}</strong> people
+            <strong>{loading ? t("common.loading") : formatNumber(contributors.length)}</strong> {t("common.people")}
           </span>
           <div className="spacer" style={{ flex: 1 }} />
           <a className="modal-count" href={`https://github.com/${REPO}/graphs/contributors`} target="_blank" rel="noreferrer">
-            View on GitHub →
+            {t("common.viewOnGitHub")} →
           </a>
         </div>
         <div className={`modal-body ${loading ? "loading" : ""}`}>
@@ -70,10 +72,10 @@ export function ContributorsModal({ onClose }: ContributorsModalProps) {
             <div className="sg-row" key={contributor.login}>
               <img src={contributor.avatar_url} alt="" />
               <a className="login" href={contributor.html_url} target="_blank" rel="noreferrer">{contributor.login}</a>
-              <span className="when">{formatNumber(contributor.contributions)} commits</span>
+              <span className="when">{formatNumber(contributor.contributions)} {t("common.commits")}</span>
             </div>
           ))}
-          {!error && !loading && !contributors.length ? <div className="modal-empty">No contributors found.</div> : null}
+          {!error && !loading && !contributors.length ? <div className="modal-empty">{t("contributors.empty")}</div> : null}
         </div>
       </div>
     </div>
