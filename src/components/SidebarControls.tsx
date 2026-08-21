@@ -181,6 +181,7 @@ export function SidebarControls({
   const activeFacets: IssueLikeFacets = prMode ? prFacets : issueFacets;
   const orgSelection = ticketMode ? activeFilters.orgs : repoFilters.orgs;
   const orgEntries = ticketMode ? activeFacets.orgs : repoFacets.orgs;
+  const activeAuthorSelection = activeFilters.authorMode === "include" ? activeFilters.authors : activeFilters.excludedAuthors;
   const onActiveFiltersChange = (next: IssueFilters | PullRequestFilters) => {
     if (prMode) onPrFiltersChange(next as PullRequestFilters);
     else onIssueFiltersChange(next as IssueFilters);
@@ -268,7 +269,12 @@ export function SidebarControls({
           <FilterSection title={t("sidebar.labels")} activeCount={activeFilters.labels.size} dataFor={prMode ? "prs-only" : "issues-only"} onClear={() => onActiveFiltersChange({ ...activeFilters, labels: new Set() })}>
             <CheckList entries={[...activeFacets.labels.entries()]} selected={activeFilters.labels} showSwatch onToggle={(value) => onActiveFiltersChange({ ...activeFilters, labels: toggleSetValue(activeFilters.labels, value) })} />
           </FilterSection>
-          <FilterSection title={t("sidebar.authors")} activeCount={activeFilters.authors.size} dataFor={prMode ? "prs-only" : "issues-only"} onClear={() => onActiveFiltersChange({ ...activeFilters, authors: new Set() })}>
+          <FilterSection
+            title={t("sidebar.authors")}
+            activeCount={activeFilters.authors.size + activeFilters.excludedAuthors.size}
+            dataFor={prMode ? "prs-only" : "issues-only"}
+            onClear={() => onActiveFiltersChange({ ...activeFilters, authors: new Set(), excludedAuthors: new Set() })}
+          >
             <div className="opt-group author-mode" role="group" aria-label={t("sidebar.authorFilterMode")}>
               {(["include", "exclude"] as const).map((mode) => (
                 <button
@@ -281,7 +287,22 @@ export function SidebarControls({
                 </button>
               ))}
             </div>
-            <CheckList entries={[...activeFacets.authors.entries()]} selected={activeFilters.authors} onToggle={(value) => onActiveFiltersChange({ ...activeFilters, authors: toggleSetValue(activeFilters.authors, value) })} />
+            <CheckList
+              entries={[...activeFacets.authors.entries()]}
+              selected={activeAuthorSelection}
+              onToggle={(value) => {
+                const authors = new Set(activeFilters.authors);
+                const excludedAuthors = new Set(activeFilters.excludedAuthors);
+                const target = activeFilters.authorMode === "include" ? authors : excludedAuthors;
+                const opposite = activeFilters.authorMode === "include" ? excludedAuthors : authors;
+                if (target.has(value)) target.delete(value);
+                else {
+                  target.add(value);
+                  opposite.delete(value);
+                }
+                onActiveFiltersChange({ ...activeFilters, authors, excludedAuthors });
+              }}
+            />
           </FilterSection>
           <FilterSection title={t("sidebar.assignees")} activeCount={activeFilters.assignees.size} dataFor={prMode ? "prs-only" : "issues-only"} onClear={() => onActiveFiltersChange({ ...activeFilters, assignees: new Set() })}>
             <CheckList entries={[...activeFacets.assignees.entries()]} selected={activeFilters.assignees} onToggle={(value) => onActiveFiltersChange({ ...activeFilters, assignees: toggleSetValue(activeFilters.assignees, value) })} />

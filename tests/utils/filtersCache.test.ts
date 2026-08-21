@@ -11,11 +11,11 @@ function makeDefaultRepoFilters() {
 }
 
 function makeDefaultIssueFilters() {
-  return { search: "", orgs: new Set<string>(), repos: new Set<string>(), labels: new Set<string>(), authors: new Set<string>(), authorMode: "include" as const, assignees: new Set<string>(), dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" };
+  return { search: "", orgs: new Set<string>(), repos: new Set<string>(), labels: new Set<string>(), authors: new Set<string>(), excludedAuthors: new Set<string>(), authorMode: "include" as const, assignees: new Set<string>(), dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" };
 }
 
 function makeDefaultPrFilters() {
-  return { search: "", orgs: new Set<string>(), repos: new Set<string>(), labels: new Set<string>(), authors: new Set<string>(), authorMode: "include" as const, assignees: new Set<string>(), dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" };
+  return { search: "", orgs: new Set<string>(), repos: new Set<string>(), labels: new Set<string>(), authors: new Set<string>(), excludedAuthors: new Set<string>(), authorMode: "include" as const, assignees: new Set<string>(), dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" };
 }
 
 describe("filtersCache", () => {
@@ -33,8 +33,8 @@ describe("filtersCache", () => {
 
   it("round-trips write then read", () => {
     const repo = { ...makeDefaultRepoFilters(), orgs: new Set(["acme"]), languages: new Set(["Go"]), visibility: "private" as const };
-    const issue = { ...makeDefaultIssueFilters(), search: "bug", orgs: new Set(["acme"]), authors: new Set(["renovate"]), authorMode: "exclude" as const };
-    const pr = { ...makeDefaultPrFilters(), preset: "draft", authors: new Set(["alice"]), authorMode: "exclude" as const };
+    const issue = { ...makeDefaultIssueFilters(), search: "bug", orgs: new Set(["acme"]), authors: new Set(["alice"]), excludedAuthors: new Set(["renovate"]), authorMode: "exclude" as const };
+    const pr = { ...makeDefaultPrFilters(), preset: "draft", authors: new Set(["alice"]), excludedAuthors: new Set(["renovate"]), authorMode: "exclude" as const };
 
     writeFiltersCache(repo, issue, pr);
     const result = readFiltersCache();
@@ -46,8 +46,11 @@ describe("filtersCache", () => {
     expect(result!.issueFilters.search).toBe("bug");
     expect(result!.issueFilters.orgs).toEqual(["acme"]);
     expect(result!.issueFilters.authorMode).toBe("exclude");
+    expect(result!.issueFilters.authors).toEqual(["alice"]);
+    expect(result!.issueFilters.excludedAuthors).toEqual(["renovate"]);
     expect(result!.prFilters.preset).toBe("draft");
     expect(result!.prFilters.authorMode).toBe("exclude");
+    expect(result!.prFilters.excludedAuthors).toEqual(["renovate"]);
     expect(result!.savedAt).toBeGreaterThan(0);
   });
 
@@ -67,13 +70,31 @@ describe("filtersCache", () => {
   it("hydrates legacy caches with inclusive author filters", () => {
     writeFiltersCache(makeDefaultRepoFilters(), makeDefaultIssueFilters(), makeDefaultPrFilters());
     const raw = JSON.parse(localStorage.getItem("gh-dash.cache.filters")!);
+    raw.issueFilters.authors = ["alice"];
+    delete raw.issueFilters.excludedAuthors;
     delete raw.issueFilters.authorMode;
+    delete raw.prFilters.excludedAuthors;
     delete raw.prFilters.authorMode;
     localStorage.setItem("gh-dash.cache.filters", JSON.stringify(raw));
 
     const hydrated = hydrateFilters(readFiltersCache()!);
     expect(hydrated.issueFilters.authorMode).toBe("include");
+    expect([...hydrated.issueFilters.authors]).toEqual(["alice"]);
+    expect(hydrated.issueFilters.excludedAuthors.size).toBe(0);
     expect(hydrated.prFilters.authorMode).toBe("include");
+  });
+
+  it("migrates legacy excluded authors into the separate exclusion set", () => {
+    writeFiltersCache(makeDefaultRepoFilters(), makeDefaultIssueFilters(), makeDefaultPrFilters());
+    const raw = JSON.parse(localStorage.getItem("gh-dash.cache.filters")!);
+    raw.issueFilters.authors = ["renovate"];
+    raw.issueFilters.authorMode = "exclude";
+    delete raw.issueFilters.excludedAuthors;
+    localStorage.setItem("gh-dash.cache.filters", JSON.stringify(raw));
+
+    const hydrated = hydrateFilters(readFiltersCache()!);
+    expect(hydrated.issueFilters.authors.size).toBe(0);
+    expect([...hydrated.issueFilters.excludedAuthors]).toEqual(["renovate"]);
   });
 
   it("returns null for corrupted JSON", () => {
