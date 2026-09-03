@@ -6,6 +6,7 @@ import type {
   GhRepo,
   GhUser,
 } from "../../types/github";
+import { readUpstreamJson } from "../upstream";
 import type { Account, ProviderConfig } from "./types";
 
 interface GitLabUser {
@@ -91,14 +92,7 @@ async function rest<T>(account: Account, config: ProviderConfig, path: string, i
     ...init,
     headers: { ...headers(account, config), ...((init?.headers as Record<string, string>) ?? {}) },
   });
-  const text = await response.text();
-  if (!response.ok) return { ok: false, status: response.status, error: text || `HTTP ${response.status}` };
-  if (!text) return { ok: true, status: response.status, data: null as T };
-  try {
-    return { ok: true, status: response.status, data: JSON.parse(text) as T };
-  } catch {
-    return { ok: false, status: response.status, error: "invalid JSON" };
-  }
+  return readUpstreamJson<T>(config.label, response);
 }
 
 async function paginate<T>(account: Account, config: ProviderConfig, path: string, maxPages = 10): Promise<RestResult<T[]>> {
