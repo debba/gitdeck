@@ -3,6 +3,7 @@ import type {
   GhPullRequest,
   GhRepo,
 } from "../../types/github";
+import { readUpstreamJson } from "../upstream";
 import {
   fetchForgejoIssues,
   fetchForgejoNotifications,
@@ -60,16 +61,14 @@ export class ForgejoProvider implements Provider {
         Authorization: `token ${token}`,
       },
     });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Identity lookup failed: ${text || `HTTP ${response.status}`}`);
-    }
-    const data = (await response.json()) as {
+    const identity = await readUpstreamJson<{
       login?: string;
       username?: string;
       avatar_url?: string;
       html_url?: string;
-    };
+    } | null>(this.config.label, response);
+    if (!identity.ok) throw new Error(`Identity lookup failed: ${identity.error}`);
+    const data = identity.data ?? {};
     const login = data.login ?? data.username ?? "";
     if (!login) throw new Error("Forgejo /user response missing login");
     return {

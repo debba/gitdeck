@@ -1,3 +1,4 @@
+import { interpretUpstreamJson } from "../utils/upstreamResponse";
 import { getEtag, peek, setEtag, swr } from "./cache";
 import type {
   ApiError,
@@ -40,7 +41,16 @@ async function readJson<T>(url: string, init?: RequestInit, cacheKey?: string): 
     const cached = peek<T>(cacheKey);
     if (cached) return cached;
   }
-  const json = (await response.json()) as T | (ApiError & { needsAuth?: boolean });
+  const body = interpretUpstreamJson<T | (ApiError & { needsAuth?: boolean })>("Gitdeck server", {
+    status: response.status,
+    statusText: response.statusText,
+    contentType: response.headers.get("content-type"),
+    text: await response.text(),
+  });
+  // A JSON error body (4xx/5xx from our API) is still parsed so `needsAuth`
+  // and `error` reach the caller; anything else becomes a readable message.
+  const json = body.ok ? body.data : parseJsonOrNull<T | ApiError>(body.error);
+  if (json === null) throw new Error(body.ok ? "Empty response" : body.error);
   const maybeError = json as Partial<ApiError> & { needsAuth?: boolean };
   if (response.status === 401 || maybeError.needsAuth) {
     throw new AuthRequiredClientError(maybeError.error || "authentication required");
@@ -53,6 +63,14 @@ async function readJson<T>(url: string, init?: RequestInit, cacheKey?: string): 
     if (newEtag) setEtag(cacheKey, newEtag);
   }
   return json as T;
+}
+
+function parseJsonOrNull<T>(text: string): T | null {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
 }
 
 function withSignal(signal?: AbortSignal): RequestInit | undefined {

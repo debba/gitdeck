@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { readUpstreamJson, requireUpstreamJson } from "../upstream";
 import type {
   GhIssue,
   GhLabel,
@@ -22,6 +23,14 @@ import type {
   ProviderConfig,
   ProviderIdentity,
 } from "./types";
+
+interface TokenExchangeResponse {
+  access_token?: string;
+  scope?: string;
+  error?: string;
+  error_description?: string;
+  interval?: number;
+}
 
 const execFileAsync = promisify(execFile);
 
@@ -143,13 +152,16 @@ export class GitHubProvider implements Provider {
       },
       body,
     });
-    const data = (await response.json()) as {
-      access_token?: string;
-      scope?: string;
-      error?: string;
-      error_description?: string;
-      interval?: number;
-    };
+    const exchange = await readUpstreamJson<TokenExchangeResponse | null>(this.config.label, response);
+    let data: TokenExchangeResponse = {};
+    if (exchange.ok) {
+      data = exchange.data ?? {};
+    } else {
+      // Device-flow states such as authorization_pending arrive as a 4xx with a
+      // JSON body, which readUpstreamJson keeps verbatim in `error`.
+      try { data = JSON.parse(exchange.error) as TokenExchangeResponse; }
+      catch { return { status: "error", error: exchange.error }; }
+    }
 
     if (data.access_token) {
       const identity = await this.fetchIdentity(data.access_token);
@@ -187,10 +199,11 @@ export class GitHubProvider implements Provider {
         Authorization: `Bearer ${token}`,
       },
     });
-    if (!response.ok) {
+    const identity = await readUpstreamJson<{ login?: string; avatar_url?: string; html_url?: string } | null>(this.config.label, response);
+    if (!identity.ok) {
       return { login: "", scope: response.headers.get("x-oauth-scopes") };
     }
-    const data = (await response.json()) as { login?: string; avatar_url?: string; html_url?: string };
+    const data = identity.data ?? {};
     return {
       login: data.login ?? "",
       scope: response.headers.get("x-oauth-scopes"),
@@ -249,9 +262,9 @@ export class GitHubProvider implements Provider {
       body: JSON.stringify({ query, variables }),
     });
     if (response.status === 401) throw new GitHubAuthRequiredError();
-    const json = (await response.json()) as { data?: T; errors?: { message: string }[] };
-    if (json.errors?.length) throw new Error(json.errors.map((entry) => entry.message).join("; "));
-    if (!json.data) throw new Error("Empty GraphQL response");
+    const json = await requireUpstreamJson<{ data?: T; errors?: { message: string }[] } | null>(this.config.label, response);
+    if (json?.errors?.length) throw new Error(json.errors.map((entry) => entry.message).join("; "));
+    if (!json?.data) throw new Error("Empty GraphQL response");
     return json.data;
   }
 
@@ -422,12 +435,9 @@ export class GitHubProvider implements Provider {
           return { ok: true, refreshed: false, notifications: [], lastModified: firstLastModified, pollInterval: firstPollInterval };
         }
       }
-      if (!response.ok) {
-        const text = await response.text();
-        return { ok: false, error: text || `HTTP ${response.status}` };
-      }
-      const raw = (await response.json()) as RawGitHubNotification[];
-      for (const entry of raw) collected.push(normalizeGitHubNotification(entry));
+      const page = await readUpstreamJson<RawGitHubNotification[] | null>(this.config.label, response);
+      if (!page.ok) return { ok: false, error: page.error };
+      for (const entry of page.data ?? []) collected.push(normalizeGitHubNotification(entry));
       const link = response.headers.get("link");
       url = parseNextLink(link);
       pages += 1;

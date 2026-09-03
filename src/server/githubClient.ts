@@ -1,8 +1,10 @@
 import { getActiveToken } from "./authProvider";
+import { readUpstreamJson, requireUpstreamJson } from "./upstream";
 
 const API_ROOT = "https://api.github.com";
 const GRAPHQL_URL = `${API_ROOT}/graphql`;
 const USER_AGENT = "gitdeck";
+const SERVICE = "GitHub";
 
 export class AuthRequiredError extends Error {
   constructor(message = "authentication required") {
@@ -44,9 +46,9 @@ export async function gql<T>(query: string, variables: Record<string, unknown>):
     body: JSON.stringify({ query, variables }),
   });
   if (response.status === 401) throw new AuthRequiredError();
-  const json = (await response.json()) as { data?: T; errors?: { message: string }[] };
-  if (json.errors?.length) throw new Error(json.errors.map((error) => error.message).join("; "));
-  if (!json.data) throw new Error("Empty GraphQL response");
+  const json = await requireUpstreamJson<{ data?: T; errors?: { message: string }[] } | null>(SERVICE, response);
+  if (json?.errors?.length) throw new Error(json.errors.map((error) => error.message).join("; "));
+  if (!json?.data) throw new Error("Empty GraphQL response");
   return json.data;
 }
 
@@ -71,15 +73,8 @@ export async function restApi<T = unknown>(path: string): Promise<RestResult<T>>
   }
   const response = await fetch(buildUrl(path), { headers: authHeaders(token) });
   if (response.status === 204) return { ok: true, data: null as T };
-  const text = await response.text();
-  if (!response.ok) {
-    return { ok: false, error: text || `HTTP ${response.status}`, status: response.status };
-  }
-  try {
-    return { ok: true, data: JSON.parse(text) as T };
-  } catch {
-    return { ok: false, error: "invalid JSON", status: response.status };
-  }
+  const result = await readUpstreamJson<T>(SERVICE, response);
+  return result.ok ? { ok: true, data: result.data } : { ok: false, error: result.error, status: result.status };
 }
 
 function parseNextLink(header: string | null): string | null {
@@ -105,17 +100,12 @@ export async function restApiPaginate<T = unknown>(path: string): Promise<RestRe
   let nextUrl: string | null = buildUrl(path);
   while (nextUrl) {
     const response: Response = await fetch(nextUrl, { headers: authHeaders(token) });
-    const text = await response.text();
-    if (!response.ok) {
-      return { ok: false, error: text || `HTTP ${response.status}`, status: response.status };
-    }
-    let page: unknown;
-    try {
-      page = JSON.parse(text);
-    } catch {
-      return { ok: false, error: "invalid JSON", status: response.status };
-    }
-    if (Array.isArray(page)) {
+    const result = await readUpstreamJson<unknown>(SERVICE, response);
+    if (!result.ok) return { ok: false, error: result.error, status: result.status };
+    const page = result.data;
+    if (page == null) {
+      // Nothing to collect on this page.
+    } else if (Array.isArray(page)) {
       for (const item of page) all.push(item as T);
     } else {
       // Some endpoints (e.g. search) return wrapped results; pagination there

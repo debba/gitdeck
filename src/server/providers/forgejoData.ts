@@ -7,6 +7,7 @@ import type {
   ReviewDecision,
 } from "../../types/github";
 import { getProviderConfig } from "../accountStore";
+import { readUpstreamJson } from "../upstream";
 import type { Account, ProviderConfig } from "./types";
 
 interface ForgejoUser {
@@ -379,14 +380,11 @@ export async function fetchForgejoNotifications(account: Account, ifModifiedSinc
   if (response.status === 304) {
     return { refreshed: false, notifications: [], pollInterval: 60, lastModified };
   }
-  if (!response.ok) {
-    const text = await response.text();
-    return { error: text || `HTTP ${response.status}` };
-  }
-  const raw = (await response.json()) as ForgejoNotification[];
+  const page = await readUpstreamJson<ForgejoNotification[] | null>(config.label, response);
+  if (!page.ok) return { error: page.error };
   return {
     refreshed: true,
-    notifications: raw.map(normalizeNotification),
+    notifications: (page.data ?? []).map(normalizeNotification),
     pollInterval: 60,
     lastModified,
   };

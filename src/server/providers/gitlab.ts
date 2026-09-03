@@ -1,5 +1,6 @@
 import type { GhIssue, GhPullRequest, GhRepo } from "../../types/github";
 import { refreshGitLabTokenIfNeeded } from "../gitlabTokenRefresh";
+import { readUpstreamJson } from "../upstream";
 import {
   fetchGitLabIssues,
   fetchGitLabMergeRequests,
@@ -55,9 +56,9 @@ export class GitLabProvider implements Provider {
         "PRIVATE-TOKEN": token,
       },
     });
-    const text = await response.text();
-    if (!response.ok) throw new Error(`Identity lookup failed: ${text || `HTTP ${response.status}`}`);
-    const data = JSON.parse(text) as { username?: string; avatar_url?: string; web_url?: string };
+    const identity = await readUpstreamJson<{ username?: string; avatar_url?: string; web_url?: string } | null>(this.config.label, response);
+    if (!identity.ok) throw new Error(`Identity lookup failed: ${identity.error}`);
+    const data = identity.data ?? {};
     if (!data.username) throw new Error("GitLab /user response missing username");
     return {
       login: data.username,
