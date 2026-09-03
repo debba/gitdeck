@@ -49,7 +49,7 @@ Open any repository to see:
 
 The app is a single repository with two cooperating processes:
 
-- **Backend** — a Node HTTP server (`src/server.ts` + `src/server/*`) that handles GitHub OAuth (Device Flow), proxies all REST/GraphQL calls, caches responses on disk, and exposes a small JSON API under `/api/*`. The GitHub token is stored locally under `~/.gitdeck/` and **never exposed to the browser**.
+- **Backend** — a Node HTTP server (`src/server.ts` bootstraps it, `src/server/app.ts` builds the request handler) that handles GitHub OAuth (Device Flow), proxies all REST/GraphQL calls, caches responses on disk, and exposes a small JSON API under `/api/*`. Endpoints are registered per domain in `src/server/routes/*` on a [find-my-way](https://github.com/delvedor/find-my-way) router (`src/server/router.ts`); GraphQL documents live in `src/server/graphql/*`. The GitHub token is stored locally under `~/.gitdeck/` and **never exposed to the browser**.
 - **Frontend** — a React 19 + Vite SPA (`src/main.tsx`, `src/App.tsx`, `src/components/*`, `src/api/*`) that consumes the backend's `/api/*` endpoints.
 
 In production both are served by the Node process: Vite builds the SPA into `dist/client/` and the server falls back to `index.html` for non-API routes.

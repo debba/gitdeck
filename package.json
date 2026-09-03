@@ -7,7 +7,7 @@
   "scripts": {
     "api": "tsx watch src/server.ts",
     "dev": "concurrently \"npm:api\" \"vite --host 127.0.0.1\"",
-    "build": "esbuild src/server.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/server.js && vite build",
+    "build": "esbuild src/server.ts --bundle --platform=node --format=esm --target=node22 --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=dist/server.js && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "serve": "node dist/server.js",
     "start": "node dist/server.js",
@@ -16,6 +16,7 @@
     "version": "node scripts/sync-version.js && conventional-changelog -p angular -i CHANGELOG.md -s && git add CHANGELOG.md src/version.ts"
   },
   "dependencies": {
+    "find-my-way": "^9.9.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-markdown": "^10.1.0",
