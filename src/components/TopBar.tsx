@@ -93,7 +93,6 @@ export function TopBar({
       <div className="spacer" />
       <div className="topbar-actions">
         <span className="meta">{lastUpdated}</span>
-        <AccountSwitcher />
         <button className="btn search-btn" aria-label={t("common.searchShortcut")} title={t("common.searchShortcut")} onClick={onOpenPalette}>
           <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
           <span className="label">{t("common.search")}</span>
@@ -166,17 +165,7 @@ export function TopBar({
           <svg className={loading ? "spin" : ""} width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>
           <span className="label">{loading ? t("common.loading") : t("common.refresh")}</span>
         </button>
-        {canLogout ? (
-          <button className="btn auth-btn" aria-label={t("common.signOut")} title={authLogin ? `${t("common.signedIn")} ${authLogin}` : t("common.signOut")} onClick={onLogout}>
-            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
-            <span className="label">{authLogin || t("common.signOut")}</span>
-          </button>
-        ) : (
-          <span className="btn auth-btn" aria-label={t("common.signedIn")} title={authLogin ? `${t("common.signedIn")} ${authLogin}` : t("common.authenticatedExternally")} style={{ cursor: "default", opacity: 0.85 }}>
-            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
-            <span className="label">{authLogin || t("common.authenticated")}</span>
-          </span>
-        )}
+        <AccountSwitcher authLogin={authLogin} canLogout={canLogout} onSignOut={onLogout} />
       </div>
     </div>
   );
