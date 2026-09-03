@@ -1136,3 +1136,26 @@
     color: var(--muted);
   }
   .command-palette-foot kbd { margin-right: 4px; }
+
+  /* Confirm dialog */
+  .modal.confirm-modal {
+    width: min(440px, calc(100vw - 32px));
+    height: auto;
+    max-height: min(80vh, 520px);
+    border-radius: 14px;
+    border: 1px solid var(--border-soft);
+  }
+  .modal-icon.danger { background: linear-gradient(135deg, var(--danger), color-mix(in srgb, var(--danger) 65%, black)); }
+  .confirm-body { padding: 18px; font-size: 13.5px; line-height: 1.55; color: var(--text); }
+  .confirm-body p { margin: 0; }
+  .confirm-foot {
+    display: flex; justify-content: flex-end; gap: 8px;
+    padding: 12px 18px; border-top: 1px solid var(--border-soft);
+    background: var(--panel-2);
+  }
+  .confirm-foot .btn { padding: 7px 14px; min-height: 34px; }
+  .btn.danger {
+    background: var(--danger); border-color: var(--danger); color: white;
+    box-shadow: 0 8px 20px color-mix(in srgb, var(--danger) 25%, transparent);
+  }
+  .btn.danger:hover { background: color-mix(in srgb, var(--danger) 86%, white); border-color: color-mix(in srgb, var(--danger) 72%, white); }

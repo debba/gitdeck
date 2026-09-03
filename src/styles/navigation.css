@@ -163,12 +163,18 @@
     background: color-mix(in srgb, var(--danger, #f87171) 20%, transparent);
     color: var(--danger, #f87171);
   }
-  .account-switcher-add {
+  .account-switcher-footer {
     margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid var(--border-soft);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .account-switcher-add {
     padding: 8px 9px;
     border: 0;
-    border-top: 1px solid var(--border-soft);
-    border-radius: 0 0 6px 6px;
+    border-radius: 6px;
     background: transparent;
     color: var(--accent);
     cursor: pointer;
@@ -178,6 +184,31 @@
   }
   .account-switcher-add:hover {
     background: var(--panel-2);
+  }
+  .account-switcher-signout {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 9px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--danger, #f87171);
+    cursor: pointer;
+    text-align: left;
+    font-size: 12.5px;
+    font-weight: 700;
+  }
+  .account-switcher-signout:hover {
+    background: color-mix(in srgb, var(--danger, #f87171) 14%, transparent);
+  }
+  .account-switcher-external {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 9px;
+    color: var(--muted);
+    font-size: 11.5px;
   }
   .add-account-backdrop {
     position: fixed;
@@ -413,7 +444,7 @@
   .btn .spin { animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .btn .label { display: inline; }
-  .auth-btn .label { max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .account-switcher-btn .label { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   @media (max-width: 1180px) {
     .search-btn .kbd { display: none; }
     .btn { padding-inline: 8px; }
