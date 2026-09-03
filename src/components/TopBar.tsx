@@ -23,6 +23,8 @@ interface TopBarProps {
   onRefresh: () => void;
   onOpenFilters: () => void;
   onOpenPalette: () => void;
+  onOpenPreferencesPage: () => void;
+  preferencesPageActive?: boolean;
   onLogout: () => void;
   canLogout?: boolean;
 }
@@ -43,6 +45,8 @@ export function TopBar({
   onRefresh,
   onOpenFilters,
   onOpenPalette,
+  onOpenPreferencesPage,
+  preferencesPageActive = false,
   onLogout,
   canLogout = true,
 }: TopBarProps) {
@@ -100,7 +104,7 @@ export function TopBar({
         </button>
         <div className="preferences-menu" ref={preferencesRef}>
           <button
-            className={`btn preferences-btn ${preferencesOpen ? "active" : ""}`}
+            className={`btn preferences-btn ${preferencesOpen || preferencesPageActive ? "active" : ""}`}
             type="button"
             aria-label={t("preferences.label")}
             aria-expanded={preferencesOpen}
@@ -154,6 +158,15 @@ export function TopBar({
                   />
                 </div>
               </div>
+              <button
+                className="preferences-page-link"
+                type="button"
+                onClick={() => { setPreferencesOpen(false); onOpenPreferencesPage(); }}
+              >
+                <span>{t("preferences.openPage")}</span>
+                <span className="preferences-page-link-meta">{t("preferences.openPageMeta")}</span>
+                <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></svg>
+              </button>
             </div>
           ) : null}
         </div>

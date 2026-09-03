@@ -4,6 +4,7 @@ import {
   fetchAuthStatus,
   fetchCIHealth,
   fetchDailyDigests,
+  fetchGoals,
   fetchNotifications,
   fetchRepoInsights,
   logoutAuth,
@@ -20,9 +21,10 @@ import { WelcomeModal } from "./components/modals/WelcomeModal";
 import { CommandPalette } from "./components/modals/CommandPalette";
 import { Footer } from "./components/Footer";
 import { TopBar } from "./components/TopBar";
+import { PreferencesView } from "./components/views/PreferencesView";
 import { SidebarControls, type InboxSidebarState } from "./components/SidebarControls";
 import { Pagination } from "./components/common/Pagination";
-import { BoardIcon, BookIcon, ExportIcon, InboxIcon, IssueIcon, LoadingIcon, PulseIcon } from "./components/common/Icons";
+import { AlertIcon, BoardIcon, BookIcon, CIIcon, DigestIcon, ExportIcon, GoalIcon, InboxIcon, InsightsIcon, IssueIcon, LoadingIcon, PullRequestIcon } from "./components/common/Icons";
 import { IssueList } from "./components/views/IssueList";
 import { PullRequestList } from "./components/views/PullRequestList";
 import { DailyDigestView } from "./components/views/DailyDigestView";
@@ -31,6 +33,8 @@ import { InsightsView } from "./components/views/InsightsView";
 import { RepoGrid } from "./components/views/RepoGrid";
 import { KanbanView } from "./components/views/KanbanView";
 import { CIHealthView } from "./components/views/CIHealthView";
+import { GoalsView } from "./components/views/GoalsView";
+import type { RepositoryGoal } from "./types/goals";
 import type {
   CIHealthData,
   DailyDigestEntry,
@@ -67,7 +71,7 @@ import { useI18n } from "./i18n/I18nProvider";
 import { useAccounts, useCapability } from "./contexts/AccountContext";
 import { useDashboardData } from "./hooks/useDashboardData";
 
-type Tab = "inbox" | "repos" | "issues" | "prs" | "kanban" | "insights" | "alerts" | "ci" | "digests";
+type Tab = "inbox" | "repos" | "issues" | "prs" | "kanban" | "insights" | "alerts" | "ci" | "digests" | "goals";
 type Theme = "dark" | "light" | "auto";
 type TextSize = "small" | "normal" | "large";
 
@@ -81,7 +85,10 @@ const TAB_ROUTES: Record<Tab, string> = {
   alerts: "/alerts",
   ci: "/ci",
   digests: "/daily",
+  goals: "/goals",
 };
+
+const PREFERENCES_ROUTE = "/preferences";
 
 const ROUTE_TABS = new Map<string, Tab>(Object.entries(TAB_ROUTES).map(([tab, route]) => [route, tab as Tab]));
 const DETAIL_TABS = new Set<DetailTab>(["overview", "actions", "commits", "pull-requests", "issues", "milestones", "releases", "branches", "forks", "traffic", "mentions", "discussions", "dependents"]);
@@ -168,6 +175,9 @@ export function App() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = tabFromPath(location.pathname);
+  const isPreferencesPage = location.pathname === PREFERENCES_ROUTE;
+  // `view` is null on the preferences page so no dashboard tab content renders there.
+  const view: Tab | null = isPreferencesPage ? null : tab;
   const routeRepoName = searchParams.get("repo") || "";
   const repoDetailTab = detailTabFromParams(searchParams);
   const routeMetricKind = metricKindFromParams(searchParams);
@@ -186,6 +196,8 @@ export function App() {
   const [dailyDigests, setDailyDigests] = useState<DailyDigestEntry[]>([]);
   const [digestPeriod, setDigestPeriod] = useState<DigestPeriod>(() => (localStorage.getItem("gh-dash.digestPeriod") as DigestPeriod) || "day");
   const [ciHealth, setCiHealth] = useState<RepoCIHealth[]>([]);
+  const [goals, setGoals] = useState<RepositoryGoal[]>([]);
+  const [goalsLoaded, setGoalsLoaded] = useState(false);
   const [insightsLoaded, setInsightsLoaded] = useState(false);
   const [ciLoaded, setCiLoaded] = useState(false);
   const [digestsLoaded, setDigestsLoaded] = useState(false);
@@ -228,6 +240,8 @@ export function App() {
     setRepoInsights([]);
     setDailyDigests([]);
     setCiHealth([]);
+    setGoals([]);
+    setGoalsLoaded(false);
     setInsightsLoaded(false);
     setCiLoaded(false);
     setDigestsLoaded(false);
@@ -278,6 +292,24 @@ export function App() {
     if (authState !== "authenticated" || !paletteOpen) return;
     loadAll();
   }, [authState, paletteOpen, loadAll]);
+
+  const refreshGoals = useCallback(async () => {
+    const data = await fetchGoals();
+    setGoals(data.goals);
+    setGoalsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (authState !== "authenticated" || tab !== "goals") return;
+    const controller = new AbortController();
+    fetchGoals(controller.signal).then((data) => {
+      if (!controller.signal.aborted) {
+        setGoals(data.goals);
+        setGoalsLoaded(true);
+      }
+    }).catch(() => { if (!controller.signal.aborted) setGoalsLoaded(true); });
+    return () => controller.abort();
+  }, [authState, activeAccountId, tab]);
 
   useEffect(() => {
     if (authState !== "authenticated") return;
@@ -340,6 +372,8 @@ export function App() {
     setRepoInsights([]);
     setDailyDigests([]);
     setCiHealth([]);
+    setGoals([]);
+    setGoalsLoaded(false);
     setInsightsLoaded(false);
     setCiLoaded(false);
     setDigestsLoaded(false);
@@ -372,8 +406,10 @@ export function App() {
     document.body.classList.toggle("tab-alerts", tab === "alerts");
     document.body.classList.toggle("tab-ci", tab === "ci");
     document.body.classList.toggle("tab-digests", tab === "digests");
+    document.body.classList.toggle("tab-goals", tab === "goals");
+    document.body.classList.toggle("route-preferences", isPreferencesPage);
     document.body.classList.toggle("filters-open", filtersOpen);
-  }, [tab, filtersOpen]);
+  }, [tab, filtersOpen, isPreferencesPage]);
 
   useEffect(() => {
     if (location.pathname === "/" || location.pathname === "/index.html") {
@@ -623,7 +659,7 @@ export function App() {
   const search =
     tab === "inbox"
       ? inboxSearch
-      : tab === "repos" || tab === "insights" || tab === "alerts" || tab === "digests"
+      : tab === "repos" || tab === "insights" || tab === "alerts" || tab === "digests" || tab === "goals"
         ? repoFilters.search
         : tab === "prs"
           ? prFilters.search
@@ -642,7 +678,7 @@ export function App() {
     if (tab === "inbox") {
       setInboxSearch(value);
       setInboxPage(1);
-    } else if (tab === "repos" || tab === "insights" || tab === "alerts" || tab === "digests") {
+    } else if (tab === "repos" || tab === "insights" || tab === "alerts" || tab === "digests" || tab === "goals") {
       setRepoFilters({ ...repoFilters, search: value });
       setRepoPage(1);
     } else if (tab === "prs") {
@@ -655,7 +691,7 @@ export function App() {
   }
 
   function resetFilters() {
-    if (tab === "repos" || tab === "insights" || tab === "alerts" || tab === "digests") setRepoFilters(defaultRepoFilters());
+    if (tab === "repos" || tab === "insights" || tab === "alerts" || tab === "digests" || tab === "goals") setRepoFilters(defaultRepoFilters());
     else if (tab === "prs") setPrFilters(defaultPrFilters());
     else setIssueFilters(defaultIssueFilters());
     clearFiltersCache();
@@ -694,11 +730,12 @@ export function App() {
     { key: "inbox" as const, label: t("tabs.inbox"), count: issues.length + pullRequests.length, ready: inboxLoaded, icon: <InboxIcon /> },
     { key: "repos" as const, label: t("tabs.repositories"), count: repos.length, ready: reposLoaded, icon: <BookIcon /> },
     { key: "issues" as const, label: t("tabs.issues"), count: issues.length, ready: issuesLoaded, icon: <IssueIcon /> },
-    { key: "prs" as const, label: t("tabs.pullRequests"), count: pullRequests.length, ready: prsLoaded, icon: <PulseIcon /> },
-    { key: "insights" as const, label: t("tabs.insights"), count: filteredInsights.length, ready: insightsLoaded, icon: <PulseIcon /> },
-    { key: "alerts" as const, label: t("tabs.alerts"), count: totalSecurityAlerts, ready: insightsLoaded, icon: <PulseIcon /> },
-    { key: "ci" as const, label: t("tabs.ci"), count: ciHealth.length, ready: ciLoaded, icon: <PulseIcon /> },
-    { key: "digests" as const, label: t("tabs.digest"), count: dailyDigests.length, ready: digestsLoaded, icon: <PulseIcon /> },
+    { key: "prs" as const, label: t("tabs.pullRequests"), count: pullRequests.length, ready: prsLoaded, icon: <PullRequestIcon /> },
+    { key: "insights" as const, label: t("tabs.insights"), count: filteredInsights.length, ready: insightsLoaded, icon: <InsightsIcon /> },
+    { key: "alerts" as const, label: t("tabs.alerts"), count: totalSecurityAlerts, ready: insightsLoaded, icon: <AlertIcon /> },
+    { key: "ci" as const, label: t("tabs.ci"), count: ciHealth.length, ready: ciLoaded, icon: <CIIcon /> },
+    { key: "digests" as const, label: t("tabs.digest"), count: dailyDigests.length, ready: digestsLoaded, icon: <DigestIcon /> },
+    { key: "goals" as const, label: t("tabs.goals"), count: goals.length, ready: goalsLoaded, icon: <GoalIcon /> },
     ...(projectsEnabled
       ? [{ key: "kanban" as const, label: t("tabs.board"), count: boardCount, ready: boardLoaded, icon: <BoardIcon /> }]
       : []),
@@ -722,6 +759,8 @@ export function App() {
         onRefresh={() => loadData(dataRequirementsForTab(tab, Boolean(routeRepoName), repoDetailTab), true)}
         onOpenFilters={() => setFiltersOpen(true)}
         onOpenPalette={() => setPaletteOpen(true)}
+        onOpenPreferencesPage={() => navigate(PREFERENCES_ROUTE)}
+        preferencesPageActive={isPreferencesPage}
         onLogout={() => void handleLogout()}
         canLogout={authMode === "device"}
       />
@@ -749,6 +788,18 @@ export function App() {
         />
         <main className={`main${dataStale ? " data-stale" : ""}`}>
           {error ? <div className="error">{error}</div> : null}
+          {isPreferencesPage ? (
+            <PreferencesView
+              theme={theme}
+              textSize={textSize}
+              hideArchivedNoise={hideArchivedNoise}
+              onThemeChange={setTheme}
+              onTextSizeChange={setTextSize}
+              onHideArchivedNoiseChange={setHideArchivedNoise}
+              onBack={() => navigate(TAB_ROUTES[tab])}
+            />
+          ) : null}
+          {view ? (
           <div className="view-head">
             <div className="tabs" role="tablist">
               {tabs.map((item) => (
@@ -762,8 +813,9 @@ export function App() {
               ))}
             </div>
           </div>
+          ) : null}
 
-          {tab === "inbox" ? (
+          {view === "inbox" ? (
             <InboxView
               items={mailboxItems}
               mailboxLabel={t(`mailbox.${mailbox}`)}
@@ -779,7 +831,7 @@ export function App() {
             />
           ) : null}
 
-          {tab === "issues" ? (
+          {view === "issues" ? (
             <div className="view-issues" style={{ display: "block" }}>
               <section className="stats">
                 <div className="stat"><div className="k">{t("stats.openIssues")}</div><div className="v">{countText(filteredIssues.length, issuesLoaded)}</div><div className="sub">{t("stats.matchingFilters")}</div></div>
@@ -807,7 +859,7 @@ export function App() {
             </div>
           ) : null}
 
-          {tab === "prs" ? (
+          {view === "prs" ? (
             <div className="view-prs" style={{ display: "block" }}>
               <section className="stats">
                 <div className="stat"><div className="k">{t("stats.openPrs")}</div><div className="v">{countText(filteredPullRequests.length, prsLoaded)}</div><div className="sub">{t("stats.matchingFilters")}</div></div>
@@ -851,7 +903,7 @@ export function App() {
             </div>
           ) : null}
 
-          {tab === "repos" ? (
+          {view === "repos" ? (
             <div className="view-repos" style={{ display: "block" }}>
               <section className="stats">
                 <div className="stat"><div className="k">{t("stats.repositories")}</div><div className="v">{countText(filteredRepos.length, reposLoaded)}</div><div className="sub">{t("stats.matchingFilters")}</div></div>
@@ -892,7 +944,7 @@ export function App() {
             </div>
           ) : null}
 
-          {tab === "insights" ? (
+          {view === "insights" ? (
             <div className="view-insights" style={{ display: "block" }}>
               <section className="stats">
                 <div className="stat"><div className="k">{t("stats.averageHealth")}</div><div className="v">{countText(averageHealth, insightsLoaded)}</div><div className="sub">{t("stats.acrossTrackedRepos")}</div></div>
@@ -904,7 +956,7 @@ export function App() {
             </div>
           ) : null}
 
-          {tab === "alerts" ? (
+          {view === "alerts" ? (
             <div className="view-alerts" style={{ display: "block" }}>
               <section className="stats">
                 <div className="stat"><div className="k">{t("alerts.totalAlerts")}</div><div className="v">{countText(totalSecurityAlerts, insightsLoaded)}</div><div className="sub">{t("alerts.affectedRepos", { count: countText(securityRepoCount, insightsLoaded) })}</div></div>
@@ -922,7 +974,7 @@ export function App() {
             </div>
           ) : null}
 
-          {tab === "ci" ? (
+          {view === "ci" ? (
             (() => {
               const totalRuns = ciHealth.reduce((sum, entry) => sum + entry.totalRuns, 0);
               const totalFailures = ciHealth.reduce((sum, entry) => sum + entry.failureCount, 0);
@@ -944,7 +996,7 @@ export function App() {
             })()
           ) : null}
 
-          {tab === "digests" ? (
+          {view === "digests" ? (
             <div className="view-digests" style={{ display: "block" }}>
               <section className="stats">
                 <div className="stat"><div className="k">{digestPeriod === "day" ? t("stats.digestDays") : digestPeriod === "week" ? t("stats.digestWeeks") : t("stats.digestMonths")}</div><div className="v">{countText(dailyDigests.length, digestsLoaded)}</div><div className="sub">{digestPeriod === "day" ? t("stats.daysWithSavedSnapshots") : t("stats.periodsAggregated")}</div></div>
@@ -957,7 +1009,9 @@ export function App() {
             </div>
           ) : null}
 
-          {tab === "kanban" && projectsEnabled ? <KanbanView onCountChange={(count) => { setBoardCount(count); setBoardLoaded(true); }} /> : null}
+          {view === "goals" ? <GoalsView goals={goals} repos={repos} loading={!goalsLoaded} onChange={refreshGoals} /> : null}
+
+          {view === "kanban" && projectsEnabled ? <KanbanView onCountChange={(count) => { setBoardCount(count); setBoardLoaded(true); }} /> : null}
         </main>
       </div>
       <Footer

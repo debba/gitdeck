@@ -9,8 +9,15 @@ services:
     environment:
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:?set GITHUB_CLIENT_ID in env or .env}
       GITHUB_OAUTH_SCOPES: ${GITHUB_OAUTH_SCOPES:-}
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_BASE_URL: ${AI_BASE_URL:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_DIGEST_MODEL: ${OPENAI_DIGEST_MODEL:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
     volumes:
       - gitdeck-data:/home/node/.gitdeck
 

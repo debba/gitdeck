@@ -15,6 +15,8 @@ const APP_ROUTES = new Set([
   "/ci",
   "/daily",
   "/board",
+  "/goals",
+  "/preferences",
   "/alert",
 ]);
 

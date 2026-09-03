@@ -6,7 +6,7 @@ import { DATA_DIR, DIGESTS_PATH } from "./config";
 import { getIssuesCached, getReposCached } from "./dashboardData";
 import { sendJsonCacheable } from "./http";
 import { fetchRepoSecuritySummary } from "./securityAlerts";
-import { maybeGenerateOpenAIDigest } from "./openaiDigest";
+import { maybeGenerateAiDigest } from "./aiDigest";
 
 const MAX_DIGEST_DAYS = 120;
 
@@ -82,7 +82,7 @@ export async function handleDailyDigests(req: IncomingMessage, res: ServerRespon
   const latest = records[records.length - 1];
   if (latest && !latest.ai) {
     try {
-      latest.ai = await maybeGenerateOpenAIDigest(latest);
+      latest.ai = await maybeGenerateAiDigest(latest);
       await saveDigests();
     } catch {
       // AI enrichment is optional and should never break digest delivery.
@@ -108,7 +108,7 @@ export async function getLatestRepoDigest(repo: string): Promise<DailyRepoDigest
   if (!repoDigest) return null;
   if (!repoDigest.ai) {
     try {
-      repoDigest.ai = await maybeGenerateOpenAIDigest(repoDigest);
+      repoDigest.ai = await maybeGenerateAiDigest(repoDigest);
     } catch {
       repoDigest.ai = null;
     }

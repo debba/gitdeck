@@ -93,7 +93,7 @@ export function DailyDigestView({ digests, period, onPeriodChange }: DailyDigest
             <div className="digest-ai-block">
               <div className="digest-ai-head">
                 <strong>{digest.ai.headline}</strong>
-                <span>{digest.ai.model}</span>
+                <span>{digest.ai.provider ? `${digest.ai.provider} · ${digest.ai.model}` : digest.ai.model}</span>
               </div>
               <div className="digest-ai-briefing">
                 {digest.ai.briefing.map((item) => <p key={item}>{item}</p>)}
