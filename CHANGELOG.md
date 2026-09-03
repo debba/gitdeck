@@ -1,3 +1,15 @@
+## [1.0.8](https://github.com/debba/gitdeck/compare/v1.0.7...v1.0.8) (2026-09-03)
+
+
+### Bug Fixes
+
+* report HTML upstream errors instead of a JSON SyntaxError ([aab2c6c](https://github.com/debba/gitdeck/commit/aab2c6cee540245d8411eae973c48f3fa2eb4327))
+
+
+### Features
+
+* merge sign-out into the account menu with a confirm dialog ([d72e0d2](https://github.com/debba/gitdeck/commit/d72e0d287a3a1d69fea08411be37bb29d0bb1206))
+
 ## [1.0.7](https://github.com/debba/gitdeck/compare/v1.0.6...v1.0.7) (2026-08-21)
 
 
