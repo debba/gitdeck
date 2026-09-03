@@ -63,3 +63,35 @@ export async function sendStaticFile(res: ServerResponse, path: string): Promise
     return false;
   }
 }
+
+export function sendRedirect(res: ServerResponse, location: string): void {
+  res.writeHead(302, { Location: location, "Cache-Control": "no-store" });
+  res.end();
+}
+
+/** Sends a cached dashboard payload, mapping `ok`/`needsAuth` onto the HTTP status. */
+export function sendPayload(
+  req: IncomingMessage,
+  res: ServerResponse,
+  payload: { ok: boolean; needsAuth?: boolean },
+): void {
+  const status = payload.ok ? 200 : payload.needsAuth ? 401 : 500;
+  sendJsonCacheable(req, res, status, payload);
+}
+
+export async function readJsonBody<T = unknown>(req: IncomingMessage): Promise<T> {
+  let body = "";
+  for await (const chunk of req) body += chunk;
+  if (!body) return {} as T;
+  return JSON.parse(body) as T;
+}
+
+/** Reads a JSON body, answering 400 and resolving to `null` when it cannot be parsed. */
+export async function parseJsonBody<T extends object>(req: IncomingMessage, res: ServerResponse): Promise<T | null> {
+  try {
+    return await readJsonBody<T>(req);
+  } catch {
+    sendJson(res, 400, { ok: false, error: "invalid JSON" });
+    return null;
+  }
+}
