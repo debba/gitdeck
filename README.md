@@ -26,8 +26,9 @@ The dashboard pulls data from the GitHub REST and GraphQL APIs and organizes it 
 - **Issues / Pull Requests** — cross-repo lists with the same filter sidebar, useful for triage across many projects.
 - **Insights** — overview of all repos with alerts ("issues need attention", "security alerts need attention", "no push for X days"), opportunities, and correlations between traffic and recent activity. Each repo gets a status (Strong / Watch / Risky).
 - **Alerts** — dedicated security-alert view for Dependabot and code scanning findings, so you can jump straight to the repos that need attention.
-- **Daily digest** — short per-repo summary of the day's movement (stars, forks, issues), with an executive summary you can copy as Markdown. Optionally augmented by an OpenAI-generated narrative when `OPENAI_API_KEY` is configured.
+- **Daily digest** — short per-repo summary of the day's movement (stars, forks, issues), with an executive summary you can copy as Markdown. Optionally augmented by an AI-generated narrative when an [AI provider](#ai-integration) is configured.
 - **Board** — Kanban-style view that groups issues into columns (Backlog, To-do, In progress, Ready, In review, etc.).
+- **Goals** — persistent repository targets for stars, forks, closed PRs, and release downloads, with progress tracking and activity-aware AI action plans (including social post ideas).
 
 ### Per-repository view
 
@@ -72,7 +73,7 @@ UI translations live in `src/i18n/`, with one dictionary file per language. See 
 
 - **Node.js 20+** (anything that supports native `fetch` and ESM is fine).
 - A **GitHub OAuth App** with **Device Flow enabled** (see next section).
-- (Optional) An **OpenAI API key** if you want AI-generated daily digest summaries.
+- (Optional) An API key for **OpenAI, Anthropic, Google Gemini, OpenRouter or any OpenAI-compatible endpoint** if you want AI-generated digest summaries and Goals action plans (see [AI integration](#ai-integration)).
 
 ## Configure GitHub
 
@@ -127,13 +128,40 @@ The server reads its configuration from environment variables:
 | `GITHUB_TOKEN`         | only `token` | —                                          | Personal access token used when `GH_AUTH_MODE=token` |
 | `HOST`                 | no       | `127.0.0.1`                                    | Interface the server binds to                    |
 | `PORT`                 | no       | `8765`                                         | Port the server listens on                       |
-| `OPENAI_API_KEY`       | no       | —                                              | Enables AI-generated daily digest narratives     |
+| `AI_PROVIDER`          | no       | auto-detected                                  | AI provider: `openai`, `anthropic`, `gemini`, `openrouter` or `custom`. When unset, the first provider with a key in the environment is used |
+| `OPENAI_API_KEY`       | no       | —                                              | OpenAI key (also enables the provider when `AI_PROVIDER` is unset) |
+| `ANTHROPIC_API_KEY`    | no       | —                                              | Anthropic key                                    |
+| `GEMINI_API_KEY`       | no       | —                                              | Google Gemini key (`GOOGLE_API_KEY` is accepted too) |
+| `OPENROUTER_API_KEY`   | no       | —                                              | OpenRouter key                                   |
+| `AI_API_KEY`           | no       | —                                              | Generic key for the provider selected with `AI_PROVIDER` (required for `custom` endpoints that need one) |
+| `AI_MODEL`             | no       | per provider                                   | Model for the provider selected with `AI_PROVIDER`. Per-provider aliases: `OPENAI_MODEL`, `ANTHROPIC_MODEL`, `GEMINI_MODEL`, `OPENROUTER_MODEL` |
+| `AI_BASE_URL`          | no       | per provider                                   | Endpoint override for the provider selected with `AI_PROVIDER`, e.g. `http://localhost:11434/v1` for Ollama with `AI_PROVIDER=custom` |
 | `GITLAB_CLIENT_ID`     | no       | —                                              | Enables GitLab OAuth when paired with `GITLAB_CLIENT_SECRET` |
 | `GITLAB_CLIENT_SECRET` | no       | —                                              | OAuth application secret for the selected GitLab instance |
 | `GITLAB_REDIRECT_URI`  | no       | inferred from request                          | Exact GitLab OAuth callback URL, ending in `/api/auth/gitlab/callback` |
 | `GITLAB_OAUTH_INSTANCE_URL` | no  | `https://gitlab.com`                           | GitLab instance on which the configured OAuth app is registered |
-| `OPENAI_DIGEST_MODEL`  | no       | `gpt-4.1-mini`                                 | Model used for digest narratives                 |
+| `OPENAI_DIGEST_MODEL`  | no       | —                                              | Legacy alias of `OPENAI_MODEL`, still honoured   |
 | `GITDECK_DIAGNOSTICS`  | no       | —                                              | Set to `1` to log provider call durations        |
+
+### AI integration
+
+Digest narratives and Goals action plans are generated by a pluggable AI provider. Supported providers and their default models:
+
+| Provider     | `AI_PROVIDER` | Key variable          | Default model         | Default endpoint |
+| ------------ | ------------- | --------------------- | --------------------- | ---------------- |
+| OpenAI       | `openai`      | `OPENAI_API_KEY`      | `gpt-4.1-mini`        | `https://api.openai.com/v1` |
+| Anthropic    | `anthropic`   | `ANTHROPIC_API_KEY`   | `claude-sonnet-5`     | `https://api.anthropic.com` |
+| Google Gemini| `gemini`      | `GEMINI_API_KEY`      | `gemini-2.5-flash`    | `https://generativelanguage.googleapis.com/v1beta` |
+| OpenRouter   | `openrouter`  | `OPENROUTER_API_KEY`  | `openai/gpt-4.1-mini` | `https://openrouter.ai/api/v1` |
+| OpenAI-compatible (Ollama, Mistral, Groq, LM Studio…) | `custom` | `AI_API_KEY` (optional) | — (set `AI_MODEL`) | `http://localhost:11434/v1` |
+
+The configuration is layered:
+
+1. **Built-in defaults** (model and endpoint per provider).
+2. **Environment variables** listed above.
+3. **Values saved from the UI** in `~/.gitdeck/gitdeck.sqlite`, which override the environment.
+
+Open **Preferences → All preferences** (or go to `/preferences`) to pick the provider, store an API key, model or base URL, test the connection, and see for every field whether the value in effect comes from the database, the environment or a default. *Reset to environment* removes every stored override. Keys saved from the UI never leave the server: the API only returns a masked version.
 
 ### Authentication modes
 
@@ -145,7 +173,13 @@ The dashboard can obtain a GitHub token in three different ways. Pick the one th
 
 In `gh-cli` and `token` modes the device-flow sign-in screen is hidden; the server treats the configured source as authoritative.
 
-Tokens and snapshots are persisted under `~/.gitdeck/`. If you previously ran an older build that stored data in `~/.gh-issues-dashboard/`, the server migrates it automatically on first start.
+Tokens and snapshots are persisted under `~/.gitdeck/`. Goals and server-side preferences are stored in `~/.gitdeck/gitdeck.sqlite`. If you previously ran an older build that stored data in `~/.gh-issues-dashboard/`, the server migrates it automatically on first start.
+
+### Extending persisted preferences and Goals
+
+Use `setPreference(scope, key, value)` and `getPreference(scope, key, fallback)` from `src/server/preferenceStore.ts` to persist any JSON-serialisable preference without creating a new schema. Low-level parameterised SQLite helpers are in `src/server/sqlite.ts`.
+
+To add a Goal metric, add one metadata entry to `GOAL_METRIC_DEFINITIONS` in `src/types/goals.ts` and its resolver to `METRIC_RESOLVERS` in `src/server/goals.ts`. The type, creation UI, persistence, progress UI, and AI context update without further wiring.
 
 ### GitLab accounts
 
@@ -218,10 +252,14 @@ With Docker Compose (recommended):
 ```bash
 cat > .env <<'EOF'
 GITHUB_CLIENT_ID=Iv1.xxxxxxxxxxxxxxxx
-# Optional — enables AI-generated daily digest narratives
+# Optional — enables AI-generated digest narratives and Goals plans (any one provider)
 OPENAI_API_KEY=sk-...
+# ANTHROPIC_API_KEY=...
+# GEMINI_API_KEY=...
+# OPENROUTER_API_KEY=...
 # Optional overrides
-# OPENAI_DIGEST_MODEL=gpt-4.1-mini
+# AI_PROVIDER=openrouter
+# AI_MODEL=anthropic/claude-sonnet-5
 # GITHUB_OAUTH_SCOPES=repo read:org project read:user user:email
 EOF
 docker compose up -d --build
@@ -240,7 +278,7 @@ docker run -d --name gitdeck \
   gitdeck
 ```
 
-The container forwards `GITHUB_CLIENT_ID`, `GITHUB_OAUTH_SCOPES`, `OPENAI_API_KEY` and `OPENAI_DIGEST_MODEL` from the host environment (or `.env` with Compose) — see [Configuration](#configuration) for the full list. It sets `HOST=0.0.0.0` so the server is reachable from outside. To wipe the stored token (full logout) remove the volume: `docker volume rm gitdeck-data`.
+The container forwards `GITHUB_CLIENT_ID`, `GITHUB_OAUTH_SCOPES` and the AI variables (`AI_PROVIDER`, `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`) from the host environment (or `.env` with Compose) — see [Configuration](#configuration) for the full list. It sets `HOST=0.0.0.0` so the server is reachable from outside. To wipe the stored token (full logout) remove the volume: `docker volume rm gitdeck-data`.
 
 ## Test & type-check
 
