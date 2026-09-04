@@ -12,6 +12,18 @@ export const GOAL_METRICS: readonly GoalMetric[] = GOAL_METRIC_DEFINITIONS.map((
 export const GOAL_PROPOSAL_FORMATS = ["x-thread", "linkedin-post", "mastodon-post", "post", "issue", "discussion", "email", "checklist", "message", "doc"] as const;
 export type GoalProposalFormat = (typeof GOAL_PROPOSAL_FORMATS)[number];
 
+export type GoalContentSource =
+  | { type: "repository"; value: string }
+  | { type: "website"; value: string };
+
+export interface GoalMediaSuggestion {
+  kind: "image" | "video";
+  title: string;
+  /** A concrete asset URL, or the source page where it can be found. */
+  sourceUrl: string;
+  guidance: string;
+}
+
 /** A ready-to-use deliverable that carries out one recommended action. */
 export interface GoalProposal {
   title: string;
@@ -21,6 +33,8 @@ export interface GoalProposal {
   content: string;
   /** Complete, ordered X posts. Present when format is `x-thread`. */
   threadPosts?: string[];
+  /** Visual assets that can accompany this platform-specific draft. */
+  mediaSuggestions?: GoalMediaSuggestion[];
 }
 
 export interface GoalSuggestion {

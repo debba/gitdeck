@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { GhRepo } from "../../types/github";
 import { formatNumber } from "../../utils/format";
 import { BookIcon } from "./Icons";
@@ -12,6 +12,7 @@ interface RepositoryPickerProps {
 
 export function RepositoryPicker({ repos, value, placeholder, onChange }: RepositoryPickerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const optionsId = useId();
   const [query, setQuery] = useState(value);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -46,8 +47,8 @@ export function RepositoryPicker({ repos, value, placeholder, onChange }: Reposi
           type="search"
           role="combobox"
           aria-expanded={open}
-          aria-controls="repository-picker-options"
-          aria-activedescendant={open && matches[activeIndex] ? `repo-option-${activeIndex}` : undefined}
+          aria-controls={optionsId}
+          aria-activedescendant={open && matches[activeIndex] ? `${optionsId}-option-${activeIndex}` : undefined}
           autoComplete="off"
           placeholder={placeholder}
           value={query}
@@ -68,14 +69,14 @@ export function RepositoryPicker({ repos, value, placeholder, onChange }: Reposi
         <span className="repository-picker-chevron">⌄</span>
       </div>
       {open ? (
-        <div className="repository-picker-menu" id="repository-picker-options" role="listbox">
+        <div className="repository-picker-menu" id={optionsId} role="listbox">
           <div className="repository-picker-summary">{matches.length ? `${matches.length} repositories` : "No repositories found"}</div>
           {matches.map((repo, index) => (
             <button
               type="button"
               role="option"
               aria-selected={repo.nameWithOwner === value}
-              id={`repo-option-${index}`}
+              id={`${optionsId}-option-${index}`}
               className={index === activeIndex ? "active" : ""}
               key={repo.nameWithOwner}
               onMouseEnter={() => setActiveIndex(index)}

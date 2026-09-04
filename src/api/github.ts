@@ -1,7 +1,7 @@
 import { interpretUpstreamJson } from "../utils/upstreamResponse";
 import { getEtag, peek, setEtag, swr } from "./cache";
 import type { AiConnectionTest, AiSettingsSummary, AiSettingsUpdate } from "../types/ai";
-import type { GoalMetric, GoalProposalsData, GoalsData, GoalSuggestion, RepositoryGoal } from "../types/goals";
+import type { GoalContentSource, GoalMetric, GoalProposalsData, GoalsData, GoalSuggestion, RepositoryGoal } from "../types/goals";
 import type {
   ApiError,
   CIHealthData,
@@ -214,9 +214,29 @@ export function generateGoalAdvice(id: string): Promise<{ ok: true; suggestions:
   return readJson(`/api/goals/${encodeURIComponent(id)}/advice`, { method: "POST" });
 }
 
-export function fetchGoalProposals(goalId: string, suggestionIndex: number, refresh = false): Promise<GoalProposalsData> {
+export function fetchRepositoryContentSources(repository: string): Promise<{ ok: true; sources: GoalContentSource[] }> {
+  return readJson(`/api/repository-content-sources?repo=${encodeURIComponent(repository)}`);
+}
+
+export function updateRepositoryContentSources(repository: string, sources: GoalContentSource[]): Promise<{ ok: true; sources: GoalContentSource[] }> {
+  return readJson(`/api/repository-content-sources?repo=${encodeURIComponent(repository)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sources }),
+  });
+}
+
+export function fetchGoalProposals(
+  goalId: string,
+  suggestionIndex: number,
+  refresh = false,
+): Promise<GoalProposalsData> {
   const query = refresh ? "?refresh=1" : "";
-  return readJson(`/api/goals/${encodeURIComponent(goalId)}/suggestions/${suggestionIndex}/proposals${query}`, { method: "POST" });
+  return readJson(`/api/goals/${encodeURIComponent(goalId)}/suggestions/${suggestionIndex}/proposals${query}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
 }
 
 export function fetchAiSettings(): Promise<{ ok: true; settings: AiSettingsSummary }> {

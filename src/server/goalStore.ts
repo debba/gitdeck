@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { GoalMetric, GoalProposal, GoalSuggestion, RepositoryGoal } from "../types/goals";
+import type { GoalContentSource, GoalMetric, GoalProposal, GoalSuggestion, RepositoryGoal } from "../types/goals";
 import { all, get, getDatabase, run } from "./sqlite";
 
 interface GoalRow {
@@ -33,6 +33,13 @@ function ensureSchema(): void {
     );
     CREATE INDEX IF NOT EXISTS repository_goals_account_deadline
       ON repository_goals(account_id, deadline);
+    CREATE TABLE IF NOT EXISTS repository_content_sources (
+      account_id TEXT NOT NULL,
+      repository TEXT NOT NULL,
+      sources TEXT NOT NULL DEFAULT '[]',
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (account_id, repository)
+    );
   `);
 }
 
@@ -88,6 +95,33 @@ export function createGoal(input: {
 export function updateGoalCurrentValue(accountId: string, id: string, currentValue: number): void {
   ensureSchema();
   run("UPDATE repository_goals SET current_value = ?, updated_at = ? WHERE account_id = ? AND id = ?", [currentValue, new Date().toISOString(), accountId, id]);
+}
+
+/** Returns the shared source library used by every goal and post for a repository. */
+export function getRepositoryContentSources(accountId: string, repository: string): GoalContentSource[] {
+  ensureSchema();
+  const row = get<{ sources: string }>(
+    "SELECT sources FROM repository_content_sources WHERE account_id = ? AND repository = ?",
+    [accountId, repository],
+  );
+  if (!row) return [];
+  try {
+    const sources = JSON.parse(row.sources) as unknown;
+    return Array.isArray(sources) ? sources as GoalContentSource[] : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Replaces a repository's fixed source library. Inputs are normalized by the route. */
+export function saveRepositoryContentSources(accountId: string, repository: string, sources: GoalContentSource[]): void {
+  ensureSchema();
+  run(
+    `INSERT INTO repository_content_sources (account_id, repository, sources, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(account_id, repository) DO UPDATE SET sources = excluded.sources, updated_at = excluded.updated_at`,
+    [accountId, repository, JSON.stringify(sources), new Date().toISOString()],
+  );
 }
 
 export function saveGoalSuggestions(accountId: string, id: string, suggestions: GoalSuggestion[]): void {

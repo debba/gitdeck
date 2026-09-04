@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { fetchGoalProposals } from "../../api/github";
+import { fetchAiSettings, fetchGoalProposals } from "../../api/github";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { GoalProposal, GoalSuggestion, RepositoryGoal } from "../../types/goals";
 import { formatRelativeTime } from "../../utils/format";
@@ -20,6 +20,7 @@ interface GoalProposalsModalProps {
 }
 
 type LoadState =
+  | { kind: "idle" }
   | { kind: "loading" }
   | { kind: "ready"; proposals: GoalProposal[]; generatedAt: string }
   | { kind: "no-ai" }
@@ -50,11 +51,15 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
  */
 export function GoalProposalsModal({ goal, suggestion, suggestionIndex, onClose, onOpenPreferences, onProposals }: GoalProposalsModalProps) {
   const { t, language } = useI18n();
-  const [state, setState] = useState<LoadState>({ kind: "loading" });
+  const initialState = (): LoadState => suggestion.proposals?.length
+    ? { kind: "ready", proposals: suggestion.proposals, generatedAt: suggestion.proposalsGeneratedAt ?? "" }
+    : goal.aiEnabled ? { kind: "idle" } : { kind: "no-ai" };
+  const [state, setState] = useState<LoadState>(initialState);
   const [refreshing, setRefreshing] = useState(false);
+  const [modelLabel, setModelLabel] = useState("");
 
   async function load(refresh: boolean) {
-    if (refresh) setRefreshing(true);
+    if (refresh && state.kind === "ready") setRefreshing(true);
     else setState({ kind: "loading" });
     try {
       const result = await fetchGoalProposals(goal.id, suggestionIndex, refresh);
@@ -69,9 +74,24 @@ export function GoalProposalsModal({ goal, suggestion, suggestionIndex, onClose,
   }
 
   useEffect(() => {
-    void load(false);
+    setState(initialState());
+    // Reset the modal without contacting the AI when the selected action changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [goal.id, suggestionIndex]);
+
+  useEffect(() => {
+    let active = true;
+    if (!goal.aiEnabled) {
+      setModelLabel("");
+      return () => { active = false; };
+    }
+    void fetchAiSettings().then(({ settings }) => {
+      if (!active) return;
+      const model = settings.model.value;
+      setModelLabel(model ? `${settings.provider.value} · ${model}` : settings.provider.value);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [goal.aiEnabled]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -89,7 +109,10 @@ export function GoalProposalsModal({ goal, suggestion, suggestionIndex, onClose,
           <div className="modal-title">
             <span className="modal-icon repository" aria-hidden="true"><GoalIcon /></span>
             <div style={{ minWidth: 0 }}>
-              <div className="kind">{t("goals.proposalsKind")} · <span className="goal-proposals-category">{suggestion.category}</span></div>
+              <div className="kind">
+                {t("goals.proposalsKind")} · <span className="goal-proposals-category">{suggestion.category}</span>
+                {modelLabel ? <span className="goal-proposals-model" title={t("preferences.ai.model")}> · AI {modelLabel}</span> : null}
+              </div>
               <h3 id="goal-proposals-title">{suggestion.title}</h3>
             </div>
           </div>
@@ -99,6 +122,13 @@ export function GoalProposalsModal({ goal, suggestion, suggestionIndex, onClose,
         <div className="modal-body goal-proposals-body">
           <p className="goal-proposals-intro">{t("goals.proposalsIntro", { repo: goal.repository })}</p>
           <blockquote className="goal-proposals-action">{suggestion.action}</blockquote>
+
+          {state.kind === "idle" ? (
+            <div className="goal-proposals-start">
+              <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" /><circle cx="12" cy="12" r="3" /></svg></span>
+              <div><strong>{t("goals.proposalsReadyTitle")}</strong><small>{t("goals.proposalsReadyText")}</small></div>
+            </div>
+          ) : null}
 
           {state.kind === "loading" ? (
             <div className="goal-proposals-loading" role="status">
@@ -153,6 +183,27 @@ export function GoalProposalsModal({ goal, suggestion, suggestionIndex, onClose,
                         ))}
                       </div>
                     ) : <Markdown className="goal-proposal-content">{proposal.content}</Markdown>}
+                    {proposal.mediaSuggestions?.length ? (
+                      <div className="goal-proposal-media">
+                        <strong>{t("goals.mediaTitle")}</strong>
+                        <div>{proposal.mediaSuggestions.map((media) => (
+                          <div className="goal-proposal-media-card" key={`${media.kind}:${media.sourceUrl}`}>
+                            {media.kind === "image" ? (
+                              <a className="goal-proposal-media-preview" href={media.sourceUrl} target="_blank" rel="noreferrer">
+                                <img src={media.sourceUrl} alt={media.title} loading="lazy" referrerPolicy="no-referrer" />
+                              </a>
+                            ) : (
+                              <video className="goal-proposal-media-preview" src={media.sourceUrl} controls preload="metadata">{t("goals.mediaVideo")}</video>
+                            )}
+                            <a className="goal-proposal-media-info" href={media.sourceUrl} target="_blank" rel="noreferrer">
+                              <span>{media.kind === "image" ? t("goals.mediaImage") : t("goals.mediaVideo")}</span>
+                              <b>{media.title}</b>
+                              <small>{media.guidance}</small>
+                            </a>
+                          </div>
+                        ))}</div>
+                      </div>
+                    ) : null}
                   </article>
                 ))}
               </div>
@@ -165,12 +216,17 @@ export function GoalProposalsModal({ goal, suggestion, suggestionIndex, onClose,
             {state.kind === "ready" && state.generatedAt ? t("goals.proposalsGeneratedAt", { time: formatRelativeTime(state.generatedAt, Date.now(), language) }) : ""}
           </span>
           <div className="spacer" />
-          {state.kind === "ready" || state.kind === "error" ? (
+          {state.kind === "ready" ? (
             <button className="btn ghost" type="button" disabled={refreshing} onClick={() => void load(true)}>
               {refreshing ? t("common.loading") : t("goals.proposalsRegenerate")}
             </button>
           ) : null}
-          <button className="btn primary" type="button" onClick={onClose}>{t("common.close")}</button>
+          <button className={state.kind === "idle" || state.kind === "error" ? "btn ghost" : "btn primary"} type="button" onClick={onClose}>{t("common.close")}</button>
+          {state.kind === "idle" || state.kind === "error" ? (
+            <button className="btn primary goal-proposals-generate" type="button" onClick={() => void load(state.kind === "error")}>
+              {state.kind === "error" ? t("goals.proposalsRetry") : t("goals.proposalsGenerate")}
+            </button>
+          ) : null}
         </footer>
       </div>
     </div>,

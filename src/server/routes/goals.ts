@@ -1,5 +1,13 @@
 import { getActive as getActiveAccount } from "../accountStore";
-import { createGoal, deleteGoal, findGoal, listGoals, saveGoalProposals, saveGoalSuggestions } from "../goalStore";
+import {
+  createGoal,
+  deleteGoal,
+  findGoal,
+  getRepositoryContentSources,
+  listGoals,
+  saveGoalProposals,
+  saveGoalSuggestions,
+} from "../goalStore";
 import { isAiConfigured } from "../ai/settings";
 import { AiNotConfiguredError, AiRequestError } from "../ai/client";
 import { generateGoalProposals, generateGoalSuggestions, refreshGoal, SOCIAL_PROPOSALS_VERSION } from "../goals";
@@ -76,12 +84,15 @@ async function proposals(ctx: RouteContext): Promise<void> {
   const index = Number(ctx.params.index);
   const suggestion = Number.isInteger(index) ? goal.suggestions[index] : undefined;
   if (!suggestion) return sendJson(ctx.res, 404, { ok: false, error: "suggestion not found" });
+  const body = await parseJsonBody<Record<string, never>>(ctx.req, ctx.res);
+  if (!body) return;
+  const sources = getRepositoryContentSources(account.id, goal.repository);
   const refresh = ctx.url.searchParams.get("refresh") === "1";
   if (!refresh && suggestion.proposals?.length && suggestion.proposalsVersion === SOCIAL_PROPOSALS_VERSION) {
     return sendJson(ctx.res, 200, { ok: true, proposals: suggestion.proposals, generatedAt: suggestion.proposalsGeneratedAt, cached: true });
   }
   try {
-    const generated = await generateGoalProposals(goal, suggestion);
+    const generated = await generateGoalProposals(goal, suggestion, sources);
     if (!generated.length) return sendJson(ctx.res, 502, { ok: false, error: "AI returned no proposals" });
     const saved = saveGoalProposals(account.id, goal.id, index, generated, SOCIAL_PROPOSALS_VERSION);
     sendJson(ctx.res, 200, { ok: true, proposals: generated, generatedAt: saved?.proposalsGeneratedAt ?? new Date().toISOString(), cached: false });
