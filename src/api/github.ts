@@ -1,5 +1,7 @@
 import { interpretUpstreamJson } from "../utils/upstreamResponse";
 import { getEtag, peek, setEtag, swr } from "./cache";
+import type { AiConnectionTest, AiSettingsSummary, AiSettingsUpdate } from "../types/ai";
+import type { GoalContentSource, GoalMetric, GoalProposalsData, GoalsData, GoalSuggestion, RepositoryGoal } from "../types/goals";
 import type {
   ApiError,
   CIHealthData,
@@ -184,6 +186,77 @@ export function addTokenAccount(payload: { providerConfigId?: string; instanceUr
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+export function fetchGoals(signal?: AbortSignal): Promise<GoalsData> {
+  return readJson<GoalsData>("/api/goals", withSignal(signal));
+}
+
+export function createGoal(payload: {
+  repository: string;
+  metric: GoalMetric;
+  targetValue: number;
+  currentValue?: number;
+  deadline: string;
+}): Promise<{ ok: true; goal: RepositoryGoal }> {
+  return readJson("/api/goals", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteGoal(id: string): Promise<{ ok: true }> {
+  return readJson(`/api/goals/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export function generateGoalAdvice(id: string): Promise<{ ok: true; suggestions: GoalSuggestion[]; generatedAt: string; aiEnabled: boolean }> {
+  return readJson(`/api/goals/${encodeURIComponent(id)}/advice`, { method: "POST" });
+}
+
+export function fetchRepositoryContentSources(repository: string): Promise<{ ok: true; sources: GoalContentSource[] }> {
+  return readJson(`/api/repository-content-sources?repo=${encodeURIComponent(repository)}`);
+}
+
+export function updateRepositoryContentSources(repository: string, sources: GoalContentSource[]): Promise<{ ok: true; sources: GoalContentSource[] }> {
+  return readJson(`/api/repository-content-sources?repo=${encodeURIComponent(repository)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sources }),
+  });
+}
+
+export function fetchGoalProposals(
+  goalId: string,
+  suggestionIndex: number,
+  refresh = false,
+): Promise<GoalProposalsData> {
+  const query = refresh ? "?refresh=1" : "";
+  return readJson(`/api/goals/${encodeURIComponent(goalId)}/suggestions/${suggestionIndex}/proposals${query}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+}
+
+export function fetchAiSettings(): Promise<{ ok: true; settings: AiSettingsSummary }> {
+  return readJson("/api/ai/settings");
+}
+
+export function updateAiSettings(payload: AiSettingsUpdate): Promise<{ ok: true; settings: AiSettingsSummary }> {
+  return readJson("/api/ai/settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function resetAiSettings(): Promise<{ ok: true; settings: AiSettingsSummary }> {
+  return readJson("/api/ai/settings", { method: "DELETE" });
+}
+
+export function testAiSettings(): Promise<AiConnectionTest> {
+  return readJson("/api/ai/settings/test", { method: "POST" });
 }
 
 export function fetchRepos(fresh = false, signal?: AbortSignal): Promise<ReposData> {

@@ -32,7 +32,7 @@ export function rgbToHsl(r: number, g: number, b: number): [number, number, numb
   return [hue * 60, saturation * 100, lightness * 100];
 }
 
-export function getLabelCssVars(hex: string): CSSProperties | undefined {
+export function getLabelCssVars(hex: string | undefined): CSSProperties | undefined {
   const cleaned = (hex || "").replace("#", "").trim();
   if (cleaned.length < 6) return undefined;
   const r = Number.parseInt(cleaned.slice(0, 2), 16);

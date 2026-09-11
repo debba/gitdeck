@@ -1,0 +1,366 @@
+.mode-growth .growth-overview {
+  display: grid;
+  gap: 18px;
+}
+
+.mode-growth .growth-overview-hero,
+.mode-growth .growth-overview-card,
+.mode-growth .growth-overview-actions {
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+
+.mode-growth .growth-overview-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 28px;
+  padding: clamp(22px, 3vw, 34px);
+  background:
+    radial-gradient(460px 190px at 100% 0, var(--accent-soft), transparent 70%),
+    linear-gradient(145deg, color-mix(in srgb, var(--panel) 96%, var(--accent) 4%), var(--panel));
+}
+
+.mode-growth .growth-overview-identity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 15px;
+}
+
+.mode-growth .growth-overview-identity .avatar {
+  flex: 0 0 auto;
+  border: 1px solid var(--accent-border);
+  box-shadow: 0 0 0 4px var(--accent-faint);
+}
+
+.mode-growth .growth-overview-identity > div {
+  min-width: 0;
+}
+
+.mode-growth .growth-overview-identity span,
+.mode-growth .growth-overview-card-heading span,
+.mode-growth .growth-overview-actions > div > span {
+  color: var(--accent);
+  font-size: 9.5px;
+  font-weight: 850;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+
+.mode-growth .growth-overview-identity h1 {
+  overflow: hidden;
+  margin: 6px 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(22px, 3vw, 34px);
+  letter-spacing: -.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mode-growth .growth-overview-identity p {
+  max-width: 680px;
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mode-growth .growth-overview-repo-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(76px, auto));
+  gap: 7px;
+  margin: 0;
+}
+
+.mode-growth .growth-overview-repo-stats > div {
+  display: grid;
+  min-height: 65px;
+  align-content: space-between;
+  padding: 11px 12px;
+  background: color-mix(in srgb, var(--panel-2) 80%, transparent);
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+}
+
+.mode-growth .growth-overview-repo-stats dt,
+.mode-growth .growth-overview-counters dt {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.mode-growth .growth-overview-repo-stats dd {
+  overflow: hidden;
+  margin: 7px 0 0;
+  font-size: 15px;
+  font-weight: 780;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mode-growth .growth-overview-error {
+  padding: 10px 12px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--danger) 36%, var(--border));
+  border-radius: 9px;
+  font-size: 12px;
+}
+
+.mode-growth .growth-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.mode-growth .growth-overview-card {
+  min-width: 0;
+  padding: 18px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .12);
+}
+
+.mode-growth .growth-overview-missions,
+.mode-growth .growth-overview-next {
+  grid-column: 1 / -1;
+}
+
+.mode-growth .growth-overview-card-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.mode-growth .growth-overview-card-heading h2,
+.mode-growth .growth-overview-actions h2 {
+  margin: 4px 0 0;
+  font-size: 16px;
+}
+
+.mode-growth .growth-overview-card-heading > strong {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 650;
+}
+
+.mode-growth .growth-overview-goal-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+  gap: 9px;
+}
+
+.mode-growth .growth-overview-goal {
+  --overview-goal-tone: var(--accent);
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+}
+
+.mode-growth .growth-overview-goal.complete {
+  --overview-goal-tone: var(--success);
+}
+
+.mode-growth .growth-overview-goal.overdue {
+  --overview-goal-tone: var(--danger);
+}
+
+.mode-growth .growth-overview-goal-heading,
+.mode-growth .growth-overview-goal-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mode-growth .growth-overview-goal-heading strong {
+  font-size: 12px;
+}
+
+.mode-growth .growth-overview-goal-heading > span {
+  color: var(--overview-goal-tone);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mode-growth .growth-overview-progress {
+  height: 5px;
+  overflow: hidden;
+  background: var(--panel-3);
+  border-radius: 99px;
+}
+
+.mode-growth .growth-overview-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--overview-goal-tone);
+  border-radius: inherit;
+}
+
+.mode-growth .growth-overview-goal-meta {
+  color: var(--muted);
+  font-size: 9.5px;
+}
+
+.mode-growth .growth-overview-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  background: var(--panel-2);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+}
+
+.mode-growth .growth-overview-empty p,
+.mode-growth .growth-overview-loading,
+.mode-growth .growth-overview-next-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.mode-growth .growth-overview-empty .btn {
+  width: auto;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.mode-growth .growth-overview-counters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.mode-growth .growth-overview-counters > div {
+  display: grid;
+  min-height: 65px;
+  align-content: space-between;
+  padding: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+}
+
+.mode-growth .growth-overview-counters dd {
+  margin: 8px 0 0;
+  font-size: 21px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.mode-growth .growth-overview-next-list {
+  display: grid;
+  gap: 7px;
+}
+
+.mode-growth .growth-overview-next-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 10px 11px;
+  background: var(--panel-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+}
+
+.mode-growth .growth-overview-next-list article > div {
+  display: grid;
+  gap: 3px;
+}
+
+.mode-growth .growth-overview-next-list strong {
+  font-size: 11.5px;
+}
+
+.mode-growth .growth-overview-next-list span,
+.mode-growth .growth-overview-next-list time {
+  color: var(--muted);
+  font-size: 9.5px;
+}
+
+.mode-growth .growth-overview-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px;
+}
+
+.mode-growth .growth-overview-actions p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.mode-growth .growth-overview-actions nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.mode-growth .growth-overview-actions .btn {
+  width: auto;
+  text-decoration: none;
+}
+
+@media (max-width: 820px) {
+  .mode-growth .growth-overview-hero,
+  .mode-growth .growth-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mode-growth .growth-overview-missions,
+  .mode-growth .growth-overview-next {
+    grid-column: 1;
+  }
+
+  .mode-growth .growth-overview-repo-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .mode-growth .growth-overview-identity {
+    align-items: flex-start;
+  }
+
+  .mode-growth .growth-overview-repo-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .mode-growth .growth-overview-repo-stats > div {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    min-height: 0;
+  }
+
+  .mode-growth .growth-overview-repo-stats dd {
+    margin: 0;
+  }
+
+  .mode-growth .growth-overview-card-heading,
+  .mode-growth .growth-overview-empty,
+  .mode-growth .growth-overview-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .mode-growth .growth-overview-actions nav {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
