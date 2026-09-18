@@ -23,7 +23,7 @@ export const DEFAULT_GROWTH_CHANNELS: GrowthChannelSelection = {
   mastodon: true,
   bluesky: false,
   discussion: false,
-  blog: false,
+  blog: true,
 };
 
 export const DEFAULT_GROWTH_CADENCE: GrowthCadence = {
@@ -32,7 +32,7 @@ export const DEFAULT_GROWTH_CADENCE: GrowthCadence = {
   mastodon: 3,
   bluesky: 0,
   discussion: 0,
-  blog: 0,
+  blog: 1,
 };
 
 export const DEFAULT_GROWTH_PILLARS: readonly GrowthPillar[] = [

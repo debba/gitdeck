@@ -1,4 +1,4 @@
-import type { GoalProposalFormat } from "./goals";
+import type { GoalProposalFormat, InterventionDestination } from "./goals";
 
 export const GROWTH_CHANNELS = [
   "x",
@@ -77,6 +77,7 @@ export interface GrowthPlanAssignment {
 export interface GrowthPlanEvidence {
   label: string;
   url: string | null;
+  kind?: "release" | "engineering";
 }
 
 export interface BuildGrowthPlanSlotsInput {
@@ -95,6 +96,7 @@ export type GrowthInterventionCategory = "product" | "community" | "engineering"
 export type GrowthInterventionOrigin = "ai" | "rule" | "manual";
 
 export interface GrowthIntervention {
+  destination?: InterventionDestination | null;
   id: string;
   accountId: string;
   repository: string;
@@ -111,6 +113,7 @@ export interface GrowthIntervention {
 }
 
 export interface CreateGrowthInterventionInput {
+  destination?: InterventionDestination | null;
   accountId: string;
   repository: string;
   goalId?: string | null;
@@ -678,6 +681,7 @@ export interface GrowthMergedPullRequestSignal {
   additions: number;
   deletions: number;
   changedFiles: number;
+  body?: string;
 }
 
 export interface GrowthOpportunity {

@@ -69,6 +69,7 @@ describe("growth content media", () => {
     expect(canRemoveGrowthContentMedia([legacy], 0, "draft")).toBe(true);
     expect(removeGrowthContentMedia([legacy], 0, "draft")).toEqual([]);
     for (const status of ["ready", "scheduled", "published"] as const) {
+      expect(removeGrowthContentMedia([legacy], 0, status, "blog")).toEqual([]);
       expect(canRemoveGrowthContentMedia([legacy], 0, status)).toBe(false);
       expect(removeGrowthContentMedia([legacy], 0, status)).toBeNull();
       expect(removeGrowthContentMedia([legacy, { ...legacy, url: "https://example.com/second.png" }], 0, status))

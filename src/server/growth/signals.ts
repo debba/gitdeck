@@ -9,13 +9,14 @@ import {
 } from "../../types/growth";
 import type { GoalContentSource, GoalMetric } from "../../types/goals";
 import { calculateGoalProgress } from "../../utils/goals";
-import { extractMediaUrls, extractWebPageSignal } from "../../utils/socialProposals";
+import { extractMediaUrls } from "../../utils/socialProposals";
+import { extractWebsiteEvidence } from "../../utils/growth/websiteEvidence";
 import { getIssuesCached, getPullRequestsCached, getReposCached } from "../dashboardData";
 import { getRepositoryContentSources, listGoals } from "../goalStore";
 import { restApi } from "../githubClient";
 import { getRepositorySnapshotHistory } from "../snapshots";
 
-const README_EXCERPT_CHARS = 7000;
+const README_EXCERPT_CHARS = 14000;
 
 export interface GrowthReleaseSignal {
   name?: string | null;
@@ -249,7 +250,7 @@ export async function fetchWebsiteSignal(value: string): Promise<unknown> {
         return { type: "website", url: value, title: null, excerpt: null, mediaUrls: [url.toString()] };
       }
       if (!contentType.includes("text/html") && !contentType.includes("text/plain")) throw new Error("unsupported source content");
-      const page = extractWebPageSignal(await readBoundedText(response), url.toString());
+      const page = extractWebsiteEvidence(await readBoundedText(response), url.toString(), contentType.includes("text/html"));
       return { type: "website", url: value, title: page.title, excerpt: page.excerpt, mediaUrls: page.mediaUrls };
     }
   } catch (error) {
@@ -274,7 +275,7 @@ export async function fetchAdditionalSourceSignals(sources: GoalContentSource[])
         name: release.name || release.tag_name || null,
         url: release.html_url ?? null,
         publishedAt: release.published_at ?? null,
-        notesExcerpt: release.body?.replace(/\s+/g, " ").trim().slice(0, 500) || null,
+        notesExcerpt: release.body?.trim().slice(0, 3000) || null,
       })),
     };
   }));
@@ -297,6 +298,7 @@ interface PullRequestRestValue {
   additions?: unknown;
   deletions?: unknown;
   changed_files?: unknown;
+  body?: unknown;
 }
 
 function mergedPullRequestFromRest(value: PullRequestRestValue): GrowthMergedPullRequestSignal | null {
@@ -324,6 +326,7 @@ function mergedPullRequestFromRest(value: PullRequestRestValue): GrowthMergedPul
     additions: value.additions as number,
     deletions: value.deletions as number,
     changedFiles: value.changed_files as number,
+    ...(typeof value.body === "string" ? { body: value.body.slice(0, 6000) } : {}),
   };
 }
 

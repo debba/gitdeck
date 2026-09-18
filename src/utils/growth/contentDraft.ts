@@ -9,6 +9,7 @@ export interface GrowthDraftCopy {
 }
 
 export interface GrowthFallbackDraftInput {
+  channel?: GrowthContentItem["channel"];
   repository: string;
   format: GrowthContentItem["format"];
   angle: string;
@@ -17,6 +18,7 @@ export interface GrowthFallbackDraftInput {
   hashtags: readonly string[];
   facts: readonly string[];
   repositoryUrl: string | null;
+  sources?: readonly string[];
 }
 
 function compact(value: string): string {
@@ -52,6 +54,25 @@ export function buildFallbackGrowthDraft(input: GrowthFallbackDraftInput): Growt
   const repositoryUrl = input.repositoryUrl ?? `https://github.com/${input.repository}`;
   const title = truncateCodePoints(angle, 100);
 
+  if (input.channel === "blog") {
+    return {
+      title,
+      body: [
+        `# ${title}`,
+        "> Research draft: develop and verify the article before publication. The source notes below are not a complete technical explanation.",
+        angle,
+        "## Source notes",
+        facts.length ? input.facts.map((fact) => fact.trim()).filter(Boolean).join("\n\n") : "No detailed evidence is available yet. Add release notes or implementation context before drafting claims.",
+        "## Questions to develop",
+        "What concrete problem does this change address? Which workflow or implementation changed? What alternatives, limitations and results do the sources establish?",
+        "## Discussion",
+        cta,
+        `## Sources\n\n${(input.sources?.length ? input.sources : [repositoryUrl]).map((url, index) => `[Source ${index + 1}](${url})`).join("\n\n")}`,
+      ].join("\n\n"),
+      threadPosts: [],
+    };
+  }
+
   if (input.format === "x-thread") {
     const tags = hashtagText(input.hashtags, 2);
     const posts = [
@@ -83,6 +104,7 @@ export function normalizeGeneratedGrowthDraft(
   format: GrowthContentItem["format"],
   summary: string,
   value: unknown,
+  channel?: GrowthContentItem["channel"],
 ): { draft: GrowthDraftCopy | null; issue: string | null } {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { draft: null, issue: "missing draft" };
@@ -93,6 +115,10 @@ export function normalizeGeneratedGrowthDraft(
   const threadPosts = Array.isArray(entry.threadPosts)
     ? entry.threadPosts.map((post) => String(post).trim()).filter(Boolean)
     : [];
+
+  if (channel === "blog" && (!/^#\s+\S/m.test(body) || !/^##\s+\S/m.test(body))) {
+    return { draft: null, issue: "blog articles require a Markdown title and sections" };
+  }
 
   if (!SOCIAL_PROPOSAL_FORMATS.includes(format as (typeof SOCIAL_PROPOSAL_FORMATS)[number])) {
     if (!title) return { draft: null, issue: "missing title" };

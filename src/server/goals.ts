@@ -6,7 +6,12 @@ import {
   normalizeSocialProposals,
   SOCIAL_PROPOSAL_FORMATS,
 } from "../utils/socialProposals";
-import { AiNotConfiguredError, AiRequestError, generateStructured } from "./ai/client";
+import { AiNotConfiguredError } from "./ai/client";
+import { generateEditorial } from "./growth/editorial";
+import { generateBlogInterventionProposal } from "./growth/blogProposal";
+import { interventionSuggestionsIssue } from "../utils/growth/editorialQuality";
+import { interventionEditorialPolicy } from "../utils/growth/interventionEditorial";
+import { getGrowthProfile, listGrowthInterventions } from "./growth/store";
 import { isAiConfigured } from "./ai/settings";
 import { getReposCached } from "./dashboardData";
 import { collectRepositorySignals } from "./growth/signals";
@@ -95,7 +100,13 @@ export async function generateRepositoryInterventionSuggestions(
   repository: string,
   goal?: Omit<RepositoryGoal, "aiEnabled">,
 ): Promise<GoalSuggestion[]> {
-  if (!isAiConfigured()) return fallbackSuggestions(repository, goal);
+  if (!isAiConfigured()) {
+    const suggestions = fallbackSuggestions(repository, goal);
+    if (getGrowthProfile(accountId, repository).channels.blog) {
+      suggestions[2] = { category: "engineering", destination: "blog", title: "Draft a practical blog article from project documentation", action: "Choose a documented workflow or implementation decision. Outline the reader's problem, explain the mechanism from source material, and discuss supported limitations. Verify the evidence before writing the complete Markdown article." };
+    }
+    return suggestions;
+  }
   const signals = await collectRepositorySignals(accountId, repository);
   const issues = signals.openIssues;
   const prs = signals.openPullRequests;
@@ -103,10 +114,26 @@ export async function generateRepositoryInterventionSuggestions(
   const progress = goal ? calculateGoalProgress(goal) : null;
   const staleIssues = issues.filter((item) => Date.now() - new Date(item.updatedAt).getTime() > 30 * 86_400_000).length;
 
-  const result = await generateStructured<{ suggestions: GoalSuggestion[] }>({
-    instructions: "Act as an open-source growth and social strategist. Give specific, ethical actions grounded in the supplied activity. Include at least one substantial social campaign idea designed as a complete 5–7 post X thread, not a generic one-line post. Also include one recommendation explicitly based on the latest verified updates (releases, recently updated issues, pull requests, or commits), clearly framing unfinished work as work in progress. Give it a strong hook, a useful narrative arc, concrete project details, and one clear call to action. A numeric goal may be absent; in that case recommend repository-level actions from the verified signals. Return JSON only.",
+  const profile = getGrowthProfile(accountId, repository);
+  const editorialPolicy = interventionEditorialPolicy(profile.channels, [
+    signals.readme?.excerpt,
+    ...signals.releases.map((release) => release.body),
+    ...(signals.mergedPullRequests ?? []).map((pullRequest) => pullRequest.body),
+    ...signals.additionalSources.flatMap((source) => {
+      if (!source || typeof source !== "object") return [];
+      const value = source as Record<string, unknown>;
+      return [value.excerpt, value.readmeExcerpt].filter((text): text is string => typeof text === "string");
+    }),
+  ]);
+  const result = await generateEditorial<{ suggestions: GoalSuggestion[] }>({
+    instructions: "Act as a technical editor and open-source strategist. Recommend one to five distinct interventions worth a reader's time; prefer fewer well-supported actions over filler when evidence is sparse. Each action must identify a concrete source-backed problem or opportunity, the target reader, specific execution steps and an observable outcome (not a promised growth number). Include source URLs when available. Prefer a worked example, a technical tradeoff, a useful explanation or a focused contribution path over generic launch campaigns. Include an evidence-led content idea for an enabled profile channel when supported; do not force an X thread for sparse evidence or a disabled channel. Respect profile language, voice, audience and avoid list. Do not repeat existing interventions unless new evidence materially changes the action. Missing activity is unknown, not proof of inactivity. A numeric goal may be absent. Choose an explicit destination for every recommendation, using the enabled editorial destinations. Return JSON only. " + editorialPolicy.guidance,
     input: JSON.stringify({
       repository,
+      generatedOn: signals.generatedOn,
+      profile: { language: profile.language, voice: profile.voice, audience: profile.audience, avoid: profile.avoid, channels: profile.channels },
+      editorialPolicy,
+      existingInterventions: listGrowthInterventions(accountId, { repository }).slice(-12)
+        .map(({ title, action, status, destination }) => ({ title, action: action.slice(0, 800), status, destination })),
       description: repo?.description,
       metric: goal?.metric ?? null,
       current: goal?.currentValue ?? null,
@@ -116,15 +143,18 @@ export async function generateRepositoryInterventionSuggestions(
       openIssues: issues.length,
       staleIssues,
       openPullRequests: prs.length,
-      recentIssues: issues.slice(0, 8).map((item) => ({ title: item.title, updatedAt: item.updatedAt })),
-      recentPullRequests: prs.slice(0, 5).map((item) => ({ title: item.title, updatedAt: item.updatedAt })),
+      recentIssues: issues.slice(0, 8).map((item) => ({ title: item.title, url: item.url, updatedAt: item.updatedAt })),
+      recentPullRequests: prs.slice(0, 5).map((item) => ({ title: item.title, url: item.url, updatedAt: item.updatedAt, isDraft: item.isDraft })),
+      mergedPullRequests: (signals.mergedPullRequests ?? []).slice(0, 6),
       latestReleases: signals.releases.map((release) => ({
         name: release.name || release.tag_name || null,
+        url: release.html_url ?? null,
         publishedAt: release.published_at ?? null,
-        notesExcerpt: release.body?.replace(/\s+/g, " ").trim().slice(0, 350) || null,
+        notesExcerpt: release.body?.trim().slice(0, 3000) || null,
       })),
       recentCommits: signals.recentCommits.slice(0, 10).map((commit) => ({
-        message: commit.commit.message.split("\n")[0],
+        message: commit.commit.message.slice(0, 1500),
+        url: commit.html_url,
         authoredAt: commit.commit.author?.date ?? null,
       })),
       readmeExcerpt: signals.readme?.excerpt ?? null,
@@ -139,33 +169,33 @@ export async function generateRepositoryInterventionSuggestions(
       properties: {
         suggestions: {
           type: "array",
-          minItems: 3,
+          minItems: 1,
           maxItems: 5,
           items: {
             type: "object",
             additionalProperties: false,
             properties: {
               category: { type: "string", enum: ["product", "community", "engineering", "marketing"] },
+              destination: { type: "string", enum: editorialPolicy.destinations },
               title: { type: "string" },
               action: { type: "string" },
             },
-            required: ["category", "title", "action"],
+            required: ["category", "destination", "title", "action"],
           },
         },
       },
       required: ["suggestions"],
     },
-    maxOutputTokens: 900,
-  });
-  const suggestions = Array.isArray(result.data.suggestions) ? result.data.suggestions : [];
-  return suggestions.length ? suggestions : fallbackSuggestions(repository, goal);
+    maxOutputTokens: 2800,
+  }, (answer) => interventionSuggestionsIssue(answer, editorialPolicy), "recommendations");
+  return result.suggestions;
 }
 
 export function generateGoalSuggestions(goal: Omit<RepositoryGoal, "aiEnabled">): Promise<GoalSuggestion[]> {
   return generateRepositoryInterventionSuggestions(goal.accountId, goal.repository, goal);
 }
 
-export const SOCIAL_PROPOSALS_VERSION = 4;
+export const SOCIAL_PROPOSALS_VERSION = 6;
 
 /**
  * Turns one recommended action into concrete, ready-to-use deliverables
@@ -193,7 +223,11 @@ export async function generateGoalProposals(
   const storedGoal = hasProposalGoal(goal) ? goal : null;
   const progress = storedGoal ? calculateGoalProgress(storedGoal) : null;
 
+  const profile = getGrowthProfile(goal.accountId, goal.repository);
+  const isBlog = suggestion.destination === "blog";
   const context = {
+    profile: { language: profile.language, voice: profile.voice, audience: profile.audience, avoid: profile.avoid },
+    mergedPullRequests: (signals.mergedPullRequests ?? []).slice(0, 6),
     generatedOn: signals.generatedOn,
     repository: goal.repository,
     repositoryUrl: repo?.url ?? null,
@@ -215,10 +249,10 @@ export async function generateGoalProposals(
       name: release.name || release.tag_name || null,
       url: release.html_url ?? null,
       publishedAt: release.published_at ?? null,
-      notesExcerpt: release.body?.replace(/\s+/g, " ").trim().slice(0, 500) || null,
+      notesExcerpt: release.body?.trim().slice(0, isBlog ? 12000 : 3000) || null,
     })),
     recentCommits: signals.recentCommits.slice(0, 10).map((commit) => ({
-      message: commit.commit.message.split("\n")[0],
+      message: isBlog ? commit.commit.message.slice(0, 3000) : commit.commit.message.split("\n")[0],
       url: commit.html_url,
       authoredAt: commit.commit.author?.date ?? null,
     })),
@@ -227,11 +261,28 @@ export async function generateGoalProposals(
     repositoryMediaUrls: signals.readme?.mediaUrls ?? [],
     additionalSources: signals.additionalSources,
   };
+  if (isBlog) {
+    const sourceUrls = [
+      repo?.url,
+      ...signals.openIssues.map((issue) => issue.url),
+      ...signals.openPullRequests.map((pullRequest) => pullRequest.url),
+      ...signals.releases.map((release) => release.html_url),
+      ...signals.recentCommits.map((commit) => commit.html_url),
+      ...(signals.mergedPullRequests ?? []).map((pullRequest) => pullRequest.url),
+      ...signals.additionalSources.flatMap((source) => {
+        if (!source || typeof source !== "object") return [];
+        const entry = source as { url?: string; repository?: string; releases?: Array<{ url?: string }> };
+        return [entry.url, entry.repository ? `https://github.com/${entry.repository}` : undefined,
+          ...(Array.isArray(entry.releases) ? entry.releases.map((release) => release?.url) : [])];
+      }),
+    ].filter((url): url is string => typeof url === "string" && /^https?:\/\//i.test(url));
+    return generateBlogInterventionProposal(context, [...new Set(sourceUrls)]);
+  }
   const instructions = [
     "You are a senior open-source social strategist. Create publishable social copy, not an operational plan.",
     "Choose one clear, credible campaign angle from the recommended action and adapt it to each platform and its audience. A numeric goal may be absent; in that case use repository signals without inventing goal progress. Use relevant facts and terminology from the fixed project source library, including website excerpts and release notes, rather than using sources only as visual references.",
     "Use only facts explicitly present in the input. Never invent users, benefits, benchmarks, quotes, release recency, roadmap commitments, or issue status. Treat issue and PR titles only as themes, not proof that work shipped. If evidence is thin, write a transparent invitation to try or contribute rather than making a claim.",
-    "Write in the main natural language of the README (English if unclear). Keep the project's own terminology and avoid generic AI phrases, hype, clickbait, fake urgency, and engagement bait.",
+    "Follow profile language, voice, audience and avoid list. Keep the project's own terminology and avoid generic AI phrases, hype, clickbait, fake urgency, and engagement bait.",
     "Return exactly three distinct assets: one 'x-thread', one 'linkedin-post', and one 'mastodon-post'. Each must work standalone and include the supplied repository URL when it is public and available.",
     "The X thread needs 5–7 ordered posts in threadPosts, each at most 280 Unicode characters. Build a coherent arc: specific hook, problem, project approach, one or two verified details, then one relevant CTA in the final post. Use at most two hashtags across the whole thread. Set content to the same posts in order.",
     "The LinkedIn post should be 700–1400 characters when the evidence supports it, use short paragraphs, speak to a professional technical audience, and use at most three hashtags. Do not imitate X-thread fragments.",
@@ -277,26 +328,24 @@ export async function generateGoalProposals(
     required: ["proposals"],
   };
 
-  let feedback: string | null = null;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const result = await generateStructured<{ proposals: GoalProposal[] }>({
-      instructions,
-      input: JSON.stringify({ ...context, validationFeedback: feedback }),
-      schemaName: "social_goal_proposals",
-      schema,
-      maxOutputTokens: 3600,
-    });
-    const proposals = normalizeSocialProposals(result.data.proposals);
-    const sourceMedia = [
-      ...(signals.readme?.mediaUrls ?? []),
-      ...signals.additionalSources.flatMap((source) => {
-        if (!source || typeof source !== "object") return [];
-        const mediaUrls = (source as { mediaUrls?: unknown }).mediaUrls;
-        return Array.isArray(mediaUrls) ? mediaUrls.filter((url): url is string => typeof url === "string") : [];
-      }),
-    ];
-    if (proposals.length === 3 && hasCompleteSocialSet(proposals)) return attachSourceMedia(proposals, sourceMedia);
-    feedback = "The previous answer was not publishable. Return all three required formats exactly once; use 5–7 X posts of at most 280 characters, LinkedIn content of at most 3000 characters, and Mastodon content of at most 500 characters.";
-  }
-  throw new AiRequestError("AI returned incomplete or platform-invalid social proposals");
+  const result = await generateEditorial<{ proposals: GoalProposal[] }>({
+    instructions,
+    input: JSON.stringify(context),
+    schemaName: "social_goal_proposals",
+    schema,
+    maxOutputTokens: 4200,
+  }, (answer) => {
+    const proposals = normalizeSocialProposals(answer?.proposals);
+    return proposals.length === 3 && hasCompleteSocialSet(proposals) ? null
+      : "Return all three required formats exactly once; use 5–7 X posts of at most 280 characters, LinkedIn content of at most 3000 characters, and Mastodon content of at most 500 characters.";
+  });
+  const sourceMedia = [
+    ...(signals.readme?.mediaUrls ?? []),
+    ...signals.additionalSources.flatMap((source) => {
+      if (!source || typeof source !== "object") return [];
+      const mediaUrls = (source as { mediaUrls?: unknown }).mediaUrls;
+      return Array.isArray(mediaUrls) ? mediaUrls.filter((url): url is string => typeof url === "string") : [];
+    }),
+  ];
+  return attachSourceMedia(normalizeSocialProposals(result.proposals), sourceMedia);
 }

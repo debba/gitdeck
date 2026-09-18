@@ -145,6 +145,24 @@ afterAll(async () => {
 });
 
 describe("Growth editorial planner", () => {
+  it("plans blog stories with detailed evidence and account-scoped existing topics", async () => {
+    const profile = profileInput();
+    store.upsertGrowthProfile("account-a", "acme/rocket", { ...profile,
+      channels: { ...profile.channels, blog: true }, cadence: { ...profile.cadence, blog: 2 } });
+    store.createContentItem({ accountId: "account-a", repository: "acme/rocket", channel: "blog", format: "doc", title: "Already covered" });
+    store.createContentItem({ accountId: "account-b", repository: "acme/rocket", channel: "blog", format: "doc", title: "Private topic" });
+    const notes = "Detailed release notes. ".repeat(50);
+    state.collectSignals.mockResolvedValueOnce({ ...signals(), releases: [{ name: "v2", body: notes }],
+      mergedPullRequests: [{ title: "Isolate drivers", url: "https://github.com/acme/rocket/pull/42", body: "Documented design rationale" }] });
+    const result = await generateGrowthContentPlan("account-a", { repository: "acme/rocket", periodStart: "2026-09-07", periodEnd: "2026-09-13" });
+    expect(result.contentItems.filter((item) => item.channel === "blog")).toHaveLength(2);
+    const request = state.generateStructured.mock.calls[0][0];
+    const input = JSON.parse(request.input);
+    expect(request.instructions).toContain("Lobsters");
+    expect(input.evidence.releases[0].notesExcerpt).toBe(notes.trim());
+    expect(input.evidence.mergedPullRequests[0].body).toBe("Documented design rationale");
+    expect(input.existingArticles.map((item: { title: string }) => item.title)).toEqual(["Already covered"]);
+  });
   it("collects evidence once, makes one structured call, normalizes, and persists every slot", async () => {
     saveProfile();
 

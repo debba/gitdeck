@@ -17,6 +17,20 @@ const evidence = [
 ];
 
 describe("normalizeGrowthPlanAssignments", () => {
+  it("alternates blog stories using release and engineering evidence independently of social slots", () => {
+    const blog = { ...slots[0], channel: "blog" as const, format: "doc" as const };
+    const result = normalizeGrowthPlanAssignments("acme/rocket", [
+      slots[0], { ...blog, key: "blog:1" }, slots[1], { ...blog, key: "blog:2" },
+    ], pillars, [
+      { label: "Repository", url: "https://example.com" },
+      { label: "Inline query plans", url: "https://example.com/release", kind: "release" },
+      { label: "Isolate drivers", url: "https://example.com/pr", kind: "engineering" },
+    ], []);
+    expect(result.assignments[1].angle).toContain("Product story: Inline query plans");
+    expect(result.assignments[1].sources).toEqual(["https://example.com/release"]);
+    expect(result.assignments[3].angle).toContain("Technical deep dive: Isolate drivers");
+    expect(result.assignments[3].sources).toEqual(["https://example.com/pr"]);
+  });
   it("accepts one assignment per known slot and constrains pillars and sources to evidence", () => {
     const result = normalizeGrowthPlanAssignments("acme/rocket", slots, pillars, evidence, [
       {

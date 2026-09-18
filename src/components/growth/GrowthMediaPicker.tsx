@@ -8,6 +8,7 @@ import type {
   GrowthAssetMetadata,
   GrowthContentItemStatus,
   GrowthContentMedia,
+  GrowthContentChannel,
 } from "../../types/growth";
 import {
   attachGrowthAssetMedia,
@@ -22,6 +23,7 @@ interface GrowthMediaPickerProps {
   repository: string;
   media: readonly GrowthContentMedia[];
   status: GrowthContentItemStatus;
+  channel?: GrowthContentChannel;
   disabled?: boolean;
   onChange: (media: GrowthContentMedia[]) => Promise<void>;
 }
@@ -40,6 +42,7 @@ export function GrowthMediaPicker({
   repository,
   media,
   status,
+  channel,
   disabled = false,
   onChange,
 }: GrowthMediaPickerProps) {
@@ -131,7 +134,7 @@ export function GrowthMediaPicker({
   }
 
   function removeSelected(index: number) {
-    void persist(`remove-${index}`, removeGrowthContentMedia(media, index, status));
+    void persist(`remove-${index}`, removeGrowthContentMedia(media, index, status, channel));
   }
 
   return (
@@ -146,7 +149,7 @@ export function GrowthMediaPicker({
               const fields = selectedFields[index] ?? { alt: entry.alt, caption: entry.caption ?? "" };
               const altId = `growth-content-media-alt-${index}`;
               const captionId = `growth-content-media-caption-${index}`;
-              const removable = canRemoveGrowthContentMedia(media, index, status);
+              const removable = canRemoveGrowthContentMedia(media, index, status, channel);
               return (
                 <article key={`${entry.assetId ?? entry.url ?? "media"}-${index}`}>
                   <div className="growth-media-picker-selected-head">

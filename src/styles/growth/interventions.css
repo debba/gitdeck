@@ -324,6 +324,36 @@
   font-size: 10.5px;
 }
 
+.mode-growth .growth-intervention-group > .growth-intervention-group-description {
+  padding: 0 0 12px;
+  line-height: 1.5;
+}
+
+.mode-growth .growth-intervention-group.destination-blog > header h2 { color: var(--accent-2); }
+.mode-growth .growth-intervention-group.destination-social > header h2 { color: var(--accent); }
+.mode-growth .growth-intervention-group.destination-communities > header h2 { color: var(--success); }
+.mode-growth .growth-intervention-group.destination-other { grid-column: 1 / -1; }
+
+.mode-growth .growth-intervention-status-group + .growth-intervention-status-group {
+  margin-top: 16px;
+}
+
+.mode-growth .growth-intervention-status-group > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.mode-growth .growth-intervention-status-group > header h3 {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 750;
+}
+
 .mode-growth .growth-intervention-list {
   display: grid;
   gap: 8px;
@@ -381,7 +411,7 @@
   text-transform: none;
 }
 
-.mode-growth .growth-intervention-card h3 {
+.mode-growth .growth-intervention-card h4 {
   margin: 0;
   font-size: 12.5px;
   line-height: 1.35;
@@ -487,7 +517,7 @@
   gap: 8px;
 }
 
-.mode-growth .status-dismissed > .growth-intervention-list,
+.mode-growth .status-dismissed > div > .growth-intervention-list,
 .mode-growth .status-dismissed > p {
   margin: 0 13px 13px;
 }

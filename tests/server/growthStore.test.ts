@@ -99,8 +99,8 @@ describe("Growth Studio store", () => {
       voice: "",
       audience: "",
       timezone: "UTC",
-      channels: { x: true, linkedin: true, mastodon: true, bluesky: false, discussion: false, blog: false },
-      cadence: { x: 3, linkedin: 1, mastodon: 3, bluesky: 0, discussion: 0, blog: 0 },
+      channels: { x: true, linkedin: true, mastodon: true, bluesky: false, discussion: false, blog: true },
+      cadence: { x: 3, linkedin: 1, mastodon: 3, bluesky: 0, discussion: 0, blog: 1 },
       hashtags: [],
       avoid: "",
       postingWindows: [],
@@ -114,9 +114,23 @@ describe("Growth Studio store", () => {
     expect(count.count).toBe(0);
   });
 
+  it("adds destinations to legacy intervention tables without losing rows or user decisions", () => {
+    const legacy = store.createGrowthIntervention({ accountId: "account-a", repository: "owner/repo", title: "Protocol choices", action: "Explain the protocol", category: "engineering", origin: "ai", dedupeKey: "protocol", status: "accepted" });
+    getDatabase().exec("ALTER TABLE growth_interventions DROP COLUMN destination");
+    store.ensureGrowthSchema();
+    store.ensureGrowthSchema();
+    expect(store.getGrowthIntervention("account-a", legacy.id)).toMatchObject({ id: legacy.id, status: "accepted", destination: null });
+    const updated = store.upsertGrowthIntervention({ accountId: "account-a", repository: "owner/repo", title: "Protocol choices", action: "Write the article", category: "engineering", origin: "ai", dedupeKey: "protocol", destination: "blog" });
+    expect(updated).toMatchObject({ id: legacy.id, destination: "blog", status: "accepted" });
+    expect(store.listGrowthInterventions("account-a")[0].destination).toBe("blog");
+    expect(store.getGrowthIntervention("account-b", legacy.id)).toBeNull();
+  });
+
   it("upserts profiles with decoded JSON fields and account scoping", () => {
     const saved = store.upsertGrowthProfile("account-a", "owner/repo", profileInput());
     expect(saved.voice).toBe("Practical and direct");
+    expect(saved.channels.blog).toBe(false);
+    expect(saved.cadence.blog).toBe(0);
     expect(saved.pillars).toEqual([
       { id: "product", label: "Product", weight: 100, description: "Product outcomes" },
     ]);
@@ -838,6 +852,16 @@ describe("Growth Studio store", () => {
         { title: "Community discussion", format: "discussion" },
       ],
     });
+  });
+
+  it("preserves blog destinations and article sources through the legacy Missions projection", () => {
+    const goal = goalStore.createGoal({ accountId: "account-a", repository: "owner/repo", metric: "stars", targetValue: 100, deadline: "2026-12-01" });
+    goalStore.saveGoalSuggestions("account-a", goal.id, [{ category: "engineering", destination: "blog", title: "Protocol choices", action: "Explain the protocol" }]);
+    expect(goalStore.findGoal("account-a", goal.id)?.suggestions[0].destination).toBe("blog");
+    const sources = ["https://example.com/protocol"];
+    const saved = goalStore.saveGoalProposals("account-a", goal.id, 0, [{ title: "Protocol choices", format: "doc", summary: "For maintainers", content: "# Protocol choices\n\n## Design\n\nExplanation", sources }], 6);
+    expect(saved).toMatchObject({ destination: "blog", proposals: [{ format: "doc", sources }] });
+    expect(store.listContentItems("account-a", { repository: "owner/repo" })[0]).toMatchObject({ channel: "blog", format: "doc", sources, media: [] });
   });
 
   it("persists new goal advice as growth rows while preserving legacy JSON", () => {

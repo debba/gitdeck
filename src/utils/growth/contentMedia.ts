@@ -2,6 +2,7 @@ import type {
   GrowthAssetMetadata,
   GrowthContentItemStatus,
   GrowthContentMedia,
+  GrowthContentChannel,
 } from "../../types/growth";
 
 const MEDIA_REQUIRED_STATUSES = new Set<GrowthContentItemStatus>([
@@ -67,16 +68,18 @@ export function canRemoveGrowthContentMedia(
   media: readonly GrowthContentMedia[],
   index: number,
   status: GrowthContentItemStatus,
+  channel?: GrowthContentChannel,
 ): boolean {
   if (!Number.isInteger(index) || index < 0 || index >= media.length) return false;
-  return !MEDIA_REQUIRED_STATUSES.has(status) || media.length > 1;
+  return channel === "blog" || !MEDIA_REQUIRED_STATUSES.has(status) || media.length > 1;
 }
 
 export function removeGrowthContentMedia(
   media: readonly GrowthContentMedia[],
   index: number,
   status: GrowthContentItemStatus,
+  channel?: GrowthContentChannel,
 ): GrowthContentMedia[] | null {
-  if (!canRemoveGrowthContentMedia(media, index, status)) return null;
+  if (!canRemoveGrowthContentMedia(media, index, status, channel)) return null;
   return media.filter((_, entryIndex) => entryIndex !== index);
 }

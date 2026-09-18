@@ -88,6 +88,7 @@ import {
 } from "../../types/growth";
 import { GOAL_PROPOSAL_FORMATS, type GoalProposal, type GoalProposalFormat } from "../../types/goals";
 import { createGrowthInterventionDedupeKey } from "../../utils/growth/interventions";
+import { growthInterventionGroup } from "../../utils/growth/interventionGroups";
 import { buildGrowthCalendarIcs } from "../../utils/growth/ics";
 import { legacyMediaToContentMedia, legacyProposalChannel } from "../../utils/growth/legacySuggestions";
 import { parseUtcIsoDateTime } from "../../utils/growth/performanceSummary";
@@ -372,6 +373,7 @@ async function generateInterventions(ctx: RouteContext): Promise<void> {
       repository,
       goalId: goalId ?? null,
       category: suggestion.category,
+      destination: suggestion.destination,
       title: suggestion.title.trim(),
       action: suggestion.action.trim(),
       origin: "ai",
@@ -1039,6 +1041,7 @@ async function content(ctx: RouteContext): Promise<void> {
 
 function proposalSources(proposal: GoalProposal, repositorySources: ReturnType<typeof getRepositoryContentSources>): string[] {
   return [...new Set([
+    ...(proposal.sources ?? []),
     ...repositorySources.flatMap((source) => source.type === "website" ? [source.value] : []),
     ...(proposal.mediaSuggestions ?? []).map((media) => media.sourceUrl),
   ])];
@@ -1050,19 +1053,20 @@ function reconcileDraftedContent(
   proposals: GoalProposal[],
   repositorySources: ReturnType<typeof getRepositoryContentSources>,
   refresh: boolean,
+  isBlog = false,
 ): ReturnType<typeof listContentItems> {
   const existing = listContentItems(accountId, { repository: intervention.repository })
     .filter((item) => item.interventionId === intervention.id);
   const generatedAt = new Date().toISOString();
 
   return proposals.map((proposal) => {
-    const formatItems = existing.filter((item) => item.format === proposal.format);
+    const formatItems = existing.filter((item) => item.format === proposal.format && (!isBlog || item.channel === "blog"));
     const current = [...formatItems].reverse().find((item) => item.generationVersion === SOCIAL_PROPOSALS_VERSION);
     if (!refresh && current) return current;
     const editable = [...formatItems].reverse().find((item) => item.status === "idea" || item.status === "draft");
     const fields = {
       goalIds: intervention.goalId ? [intervention.goalId] : [],
-      channel: legacyProposalChannel(proposal.format),
+      channel: isBlog ? "blog" as const : legacyProposalChannel(proposal.format),
       format: proposal.format,
       title: proposal.title,
       summary: proposal.summary,
@@ -1102,14 +1106,17 @@ async function draftContent(ctx: RouteContext): Promise<void> {
   const intervention = getGrowthIntervention(account.id, body.interventionId.trim());
   if (!intervention) return sendJson(ctx.res, 404, { ok: false, error: "intervention not found" });
   const refresh = body.refresh === true;
-  const existing = listContentItems(account.id, { repository: intervention.repository })
-    .filter((item) => item.interventionId === intervention.id && item.generationVersion === SOCIAL_PROPOSALS_VERSION);
-  const currentSocialItems = SOCIAL_PROPOSAL_FORMATS.flatMap((format) => {
+  const repositoryContent = listContentItems(account.id, { repository: intervention.repository });
+  const isBlog = growthInterventionGroup(intervention, repositoryContent) === "blog";
+  const existing = repositoryContent.filter((item) => item.interventionId === intervention.id
+    && item.generationVersion === SOCIAL_PROPOSALS_VERSION && (!isBlog || item.channel === "blog"));
+  const expectedFormats: readonly GoalProposalFormat[] = isBlog ? ["doc"] : SOCIAL_PROPOSAL_FORMATS;
+  const currentItems = expectedFormats.flatMap((format) => {
     const item = [...existing].reverse().find((candidate) => candidate.format === format);
     return item ? [item] : [];
   });
-  if (!refresh && currentSocialItems.length === SOCIAL_PROPOSAL_FORMATS.length) {
-    return sendJson(ctx.res, 200, { ok: true, contentItems: currentSocialItems, cached: true });
+  if (!refresh && currentItems.length === expectedFormats.length) {
+    return sendJson(ctx.res, 200, { ok: true, contentItems: currentItems, cached: true });
   }
 
   const goal = intervention.goalId ? findGoal(account.id, intervention.goalId) : null;
@@ -1120,11 +1127,15 @@ async function draftContent(ctx: RouteContext): Promise<void> {
   try {
     const proposals = await generateGoalProposals(
       goal ?? { accountId: account.id, repository: intervention.repository },
-      { title: intervention.title, action: intervention.action, category: intervention.category },
+      { title: intervention.title, action: intervention.action, category: intervention.category,
+        ...(isBlog ? { destination: "blog" as const } : {}) },
       repositorySources,
     );
     if (!proposals.length) return sendJson(ctx.res, 502, { ok: false, error: "AI returned no proposals" });
-    const contentItems = reconcileDraftedContent(account.id, intervention, proposals, repositorySources, refresh);
+    if (isBlog && (proposals.length !== 1 || proposals[0].format !== "doc")) {
+      return sendJson(ctx.res, 502, { ok: false, error: "AI returned no blog article" });
+    }
+    const contentItems = reconcileDraftedContent(account.id, intervention, proposals, repositorySources, refresh, isBlog);
     sendJson(ctx.res, 200, { ok: true, contentItems, cached: false });
   } catch (error) {
     if (error instanceof AiNotConfiguredError) {

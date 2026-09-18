@@ -16,8 +16,10 @@
     "version": "node scripts/sync-version.js && conventional-changelog -p angular -i CHANGELOG.md -s && git add CHANGELOG.md src/version.ts"
   },
   "dependencies": {
+    "@mozilla/readability": "^0.6.0",
     "better-sqlite3": "^11.10.0",
     "find-my-way": "^9.9.0",
+    "linkedom": "^0.18.13",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-markdown": "^10.1.0",

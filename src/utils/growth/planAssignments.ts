@@ -34,7 +34,7 @@ function normalizedEvidence(evidence: readonly GrowthPlanEvidence[]): GrowthPlan
     const key = `${label ?? ""}\n${url ?? ""}`;
     if ((!label && !url) || seen.has(key)) return [];
     seen.add(key);
-    return [{ label: label ?? "Repository update", url }];
+    return [{ ...entry, label: label ?? "Repository update", url }];
   });
 }
 
@@ -45,6 +45,25 @@ function fallbackAssignment(
   evidence: readonly GrowthPlanEvidence[],
   index: number,
 ): GrowthPlanAssignment {
+  if (slot.channel === "blog") {
+    const preferredKind = slot.pillarId === "engineering" || slot.pillarId === "education" || index % 2 === 1
+      ? "engineering" : "release";
+    const preferred = evidence.filter((entry) => entry.kind === preferredKind);
+    const candidates = preferred.length ? preferred : evidence.filter((entry) => entry.kind);
+    const source = candidates.length ? candidates[Math.floor(index / 2) % candidates.length] : evidence[0];
+    const technical = source?.kind === "engineering";
+    return {
+      slotKey: slot.key,
+      pillarId: slot.pillarId,
+      angle: source
+        ? technical
+          ? `Technical deep dive: ${source.label}. Explain the problem, implementation and evidenced tradeoffs for Reddit, Hacker News or Lobsters.`
+          : `Product story: ${source.label}. Find one concrete workflow change worth sharing on social networks, with a before/after and honest limitations.`
+        : `Explore a documented workflow in ${repository}; gather source evidence before making product or technical claims.`,
+      sources: source?.url ? [source.url] : [],
+      cta: technical ? "Invite readers to discuss the approach and its tradeoffs." : "Invite readers to try the workflow and share their experience.",
+    };
+  }
   const item = evidence.length > 0 ? evidence[index % evidence.length] : null;
   return {
     slotKey: slot.key,
@@ -82,7 +101,9 @@ export function normalizeGrowthPlanAssignments(
   }
 
   let usedFallback = false;
+  let blogIndex = 0;
   const assignments = slots.map((slot, index) => {
+    const fallbackIndex = slot.channel === "blog" ? blogIndex++ : index;
     const candidate = candidatesBySlot.get(slot.key);
     const angle = oneLine(candidate?.angle, 240);
     const cta = oneLine(candidate?.cta, 200);
@@ -94,7 +115,7 @@ export function normalizeGrowthPlanAssignments(
         weight: 1,
         description: "",
       };
-      return fallbackAssignment(repository, slot, pillar, evidence, index);
+      return fallbackAssignment(repository, slot, pillar, evidence, fallbackIndex);
     }
 
     const pillarId = typeof candidate.pillarId === "string" && pillarsById.has(candidate.pillarId)

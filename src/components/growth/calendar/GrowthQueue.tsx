@@ -134,8 +134,8 @@ function GrowthQueueItem({ item, timezone, pillarLabel, onOpen, onUpdate }: Grow
         <div className="growth-queue-badges">
           <span>{t(`growth.channel.${item.channel}` as TranslationKey)}</span>
           {pillarLabel ? <span>{pillarLabel}</span> : null}
-          <span className={item.media.length ? "media-complete" : "media-missing"}>
-            {t(item.media.length ? "growth.queueMediaComplete" : "growth.queueMediaMissing")}
+          <span className={item.media.length || item.channel === "blog" ? "media-complete" : "media-missing"}>
+            {t(item.media.length ? "growth.queueMediaComplete" : item.channel === "blog" ? "growth.blogMediaOptional" : "growth.queueMediaMissing")}
           </span>
         </div>
       </header>

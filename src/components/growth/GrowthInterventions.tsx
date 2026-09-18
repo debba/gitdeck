@@ -14,7 +14,6 @@ import { useGoals } from "../../hooks/useGoals";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { TranslationKey } from "../../i18n/translations";
 import {
-  GROWTH_INTERVENTION_STATUSES,
   type GrowthContentItem,
   type GrowthIntervention,
   type GrowthInterventionCategory,
@@ -29,6 +28,8 @@ import {
 } from "../../utils/growth/evergreen";
 import { ContentItemDrawer } from "./ContentItemDrawer";
 import { GrowthInterventionCreateModal } from "./GrowthInterventionCreateModal";
+import { GrowthInterventionGroup } from "./GrowthInterventionGroup";
+import { groupGrowthInterventions } from "../../utils/growth/interventionGroups";
 
 interface GrowthInterventionsProps {
   accountId: string | null;
@@ -39,12 +40,6 @@ interface GrowthInterventionsProps {
 const CATEGORIES: GrowthInterventionCategory[] = ["product", "community", "engineering", "marketing"];
 const ORIGINS: GrowthInterventionOrigin[] = ["ai", "rule", "manual"];
 const metricLabels = new Map<GoalMetric, string>(GOAL_METRIC_DEFINITIONS.map((metric) => [metric.id, metric.label]));
-const statusKeys: Record<GrowthInterventionStatus, TranslationKey> = {
-  proposed: "growth.status.proposed",
-  accepted: "growth.status.accepted",
-  dismissed: "growth.status.dismissed",
-  done: "growth.status.done",
-};
 const categoryKeys: Record<GrowthInterventionCategory, TranslationKey> = {
   product: "growth.interventionsCategory.product",
   community: "growth.interventionsCategory.community",
@@ -83,7 +78,6 @@ export function GrowthInterventions({ accountId, enabled, repository }: GrowthIn
   const [originFilter, setOriginFilter] = useState<"all" | GrowthInterventionOrigin>("all");
   const [generationGoalId, setGenerationGoalId] = useState("");
   const [manualModalOpen, setManualModalOpen] = useState(false);
-  const [dismissedOpen, setDismissedOpen] = useState(false);
   const [aiEnabled, setAiEnabled] = useState<boolean | null>(null);
   const [selectedContentItem, setSelectedContentItem] = useState<GrowthContentItem | null>(null);
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
@@ -135,7 +129,6 @@ export function GrowthInterventions({ accountId, enabled, repository }: GrowthIn
     setContentItems([]);
     setNotice("");
     setManualModalOpen(false);
-    setDismissedOpen(false);
     setSelectedContentItem(null);
     setDraftErrors({});
     setRecycleFeedback({});
@@ -167,6 +160,7 @@ export function GrowthInterventions({ accountId, enabled, repository }: GrowthIn
     (categoryFilter === "all" || intervention.category === categoryFilter)
     && (originFilter === "all" || intervention.origin === originFilter)
   )), [categoryFilter, interventions, originFilter]);
+  const groups = useMemo(() => groupGrowthInterventions(filtered, contentItems), [filtered, contentItems]);
 
   async function changeStatus(intervention: GrowthIntervention, status: GrowthInterventionStatus) {
     setBusy(intervention.id);
@@ -343,7 +337,7 @@ export function GrowthInterventions({ accountId, enabled, repository }: GrowthIn
             </span>
           ) : null}
         </div>
-        <h3>{intervention.title}</h3>
+        <h4>{intervention.title}</h4>
         <p>{intervention.action}</p>
         {linkedContent.length ? (
           <div className="growth-intervention-content">
@@ -491,29 +485,9 @@ export function GrowthInterventions({ accountId, enabled, repository }: GrowthIn
       ) : null}
 
       <div className="growth-intervention-groups" aria-busy={loading}>
-        {GROWTH_INTERVENTION_STATUSES.filter((status) => status !== "dismissed").map((status) => {
-          const entries = filtered.filter((intervention) => intervention.status === status);
-          return (
-            <section className={`growth-intervention-group status-${status}`} key={status}>
-              <header><h2>{t(statusKeys[status])}</h2><span>{entries.length}</span></header>
-              {entries.length ? <div className="growth-intervention-list">{entries.map(renderIntervention)}</div> : <p>{t("growth.interventionsGroupEmpty")}</p>}
-            </section>
-          );
-        })}
-        {(() => {
-          const dismissed = filtered.filter((intervention) => intervention.status === "dismissed");
-          return (
-            <section className="growth-intervention-group status-dismissed">
-              <button className="growth-intervention-group-toggle" type="button" aria-expanded={dismissedOpen} onClick={() => setDismissedOpen((open) => !open)}>
-                <span><strong>{t(statusKeys.dismissed)}</strong><small>{dismissed.length}</small></span>
-                <span aria-hidden="true">{dismissedOpen ? "−" : "+"}</span>
-              </button>
-              {dismissedOpen ? (
-                dismissed.length ? <div className="growth-intervention-list">{dismissed.map(renderIntervention)}</div> : <p>{t("growth.interventionsGroupEmpty")}</p>
-              ) : null}
-            </section>
-          );
-        })()}
+        {groups.filter((group) => group.id !== "other" || group.interventions.length > 0).map((group) => (
+          <GrowthInterventionGroup key={`${accountId}:${repository}:${group.id}`} group={group} renderIntervention={renderIntervention} />
+        ))}
       </div>
       <GrowthInterventionCreateModal
         open={manualModalOpen}

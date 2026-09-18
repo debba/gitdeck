@@ -14,17 +14,20 @@ import {
   normalizeGrowthMediaCandidates,
   type GrowthMediaCandidate,
 } from "../../utils/growth/mediaCandidates";
-import { AiNotConfiguredError, AiRequestError, generateStructured } from "../ai/client";
+import { AiNotConfiguredError, AiRequestError } from "../ai/client";
+import { generateEditorial } from "./editorial";
 import { isAiConfigured } from "../ai/settings";
+import { GROWTH_BLOG_EDITORIAL_GUIDE } from "../../utils/growth/blogArticle";
 import {
   getContentItem,
   getGrowthProfile,
   listGrowthAssets,
+  listContentItems,
   updateContentItem,
 } from "./store";
 import { collectRepositorySignals, type GrowthRepositorySignals } from "./signals";
 
-export const GROWTH_DRAFTER_GENERATION_VERSION = 1;
+export const GROWTH_DRAFTER_GENERATION_VERSION = 2;
 
 export class GrowthContentDraftConflictError extends Error {
   constructor() {
@@ -93,6 +96,7 @@ function verifiedSourceUrls(
     ...signals.openPullRequests.map((pullRequest) => pullRequest.url),
     ...signals.releases.map((release) => release.html_url),
     ...signals.recentCommits.map((commit) => commit.html_url),
+    ...(signals.mergedPullRequests ?? []).map((pullRequest) => pullRequest.url),
     ...additionalSourceUrls(signals.additionalSources),
     ...mediaCandidates.map((candidate) => candidate.url),
   ];
@@ -153,6 +157,7 @@ function promptContext(
   mediaCandidates: readonly GrowthMediaCandidate[],
   allowedSources: readonly string[],
 ): Record<string, unknown> {
+  const isBlog = item.channel === "blog";
   return {
     generatedOn: signals.generatedOn,
     repository: item.repository,
@@ -182,10 +187,10 @@ function promptContext(
       name: release.name || release.tag_name || null,
       url: release.html_url ?? null,
       publishedAt: release.published_at ?? null,
-      notesExcerpt: release.body ? compactText(release.body, 500) : null,
+      notesExcerpt: release.body?.slice(0, isBlog ? 12000 : 3000) ?? null,
     })),
     recentCommits: signals.recentCommits.slice(0, 10).map((commit) => ({
-      message: commit.commit.message.split("\n")[0],
+      message: isBlog ? commit.commit.message.slice(0, 3000) : commit.commit.message.split("\n")[0],
       url: commit.html_url,
       authoredAt: commit.commit.author?.date ?? null,
     })),
@@ -196,6 +201,12 @@ function promptContext(
       isDraft: pullRequest.isDraft,
     })),
     readmeExcerpt: signals.readme?.excerpt ?? null,
+    mergedPullRequests: (signals.mergedPullRequests ?? []).slice(0, isBlog ? 12 : 6),
+    recentContentToAvoidRepeating: listContentItems(item.accountId, { repository: item.repository })
+      .filter((entry) => entry.id !== item.id && entry.body.trim())
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 8)
+      .map((entry) => ({ title: entry.title, angle: entry.angle, excerpt: entry.body.slice(0, 500) })),
     goals: signals.goals,
     additionalSources: signals.additionalSources,
     allowedSources,
@@ -215,11 +226,15 @@ async function requestDraft(
   mediaCandidates: readonly GrowthMediaCandidate[],
   allowedSources: readonly string[],
 ): Promise<DrafterAnswer> {
-  const result = await generateStructured<DrafterAnswer>({
+  return generateEditorial<DrafterAnswer>({
     instructions: [
       "Draft one publishable, evidence-grounded open-source content item for the exact supplied format and profile language.",
       "Use only facts in verifiedSignals, preserve the requested angle, pillar and CTA, and do not describe unfinished issue or pull-request work as shipped.",
-      "Follow the profile voice, audience, hashtags and avoid list.",
+      "Follow the profile voice, audience, hashtags and avoid list. Avoid repeating hooks and explanations in recentContentToAvoidRepeating; develop a fresh, supported angle within the assigned topic.",
+      ...(item.channel === "blog" ? [
+        GROWTH_BLOG_EDITORIAL_GUIDE,
+        "Return the complete article in body as Markdown, with one # title, a compelling introduction, ## sections and source links near supported claims. Do not wrap the article in a code fence or include YAML frontmatter. Return an empty threadPosts array. Aim for 800–1600 words when the evidence supports that depth; write less rather than invent details. Focus on the assigned source URLs and use other signals only for relevant context. End with a substantive question or practical next step, not a sales pitch. Do not add social hashtags or a portal submission pitch to the article. Media is optional.",
+      ] : []),
       "For x-thread return 5–7 ordered posts of at most 280 Unicode characters and at most two hashtags across the thread. For linkedin-post stay within 3000 characters and three hashtags. For mastodon-post stay within 500 characters and two hashtags.",
       "Cite only URLs in allowedSources. Select media only by candidateKey from mediaCandidates, write useful non-empty alt text, and never create a media URL.",
       "Return JSON only.",
@@ -255,9 +270,8 @@ async function requestDraft(
       },
       required: ["title", "body", "threadPosts", "sources", "media"],
     },
-    maxOutputTokens: item.format === "x-thread" ? 2_400 : 1_800,
-  });
-  return result.data;
+    maxOutputTokens: item.channel === "blog" ? 6_500 : item.format === "x-thread" ? 2_400 : 1_800,
+  }, (answer) => normalizeGeneratedGrowthDraft(item.format, item.summary, answer, item.channel).issue);
 }
 
 function fallbackDraft(
@@ -265,14 +279,24 @@ function fallbackDraft(
   profile: GrowthProfile,
   signals: GrowthRepositorySignals,
 ): GrowthDraftCopy {
+  const blogFacts = [
+    ...signals.releases.filter((release) => !item.sources.length || item.sources.includes(release.html_url ?? ""))
+      .map((release) => `${release.name || release.tag_name || "Release"}\n\n${release.body?.slice(0, 12000) || "Release notes are unavailable."}`),
+    ...(signals.mergedPullRequests ?? []).filter((pullRequest) => !item.sources.length || item.sources.includes(pullRequest.url))
+      .map((pullRequest) => `Merged: ${pullRequest.title}\n\n${pullRequest.body || "Implementation details are unavailable."}`),
+    ...signals.recentCommits.filter((commit) => item.sources.includes(commit.html_url))
+      .map((commit) => commit.commit.message),
+  ];
   return buildFallbackGrowthDraft({
+    channel: item.channel,
+    sources: item.sources,
     repository: item.repository,
     format: item.format,
     angle: item.angle,
     cta: item.summary,
     audience: profile.audience,
     hashtags: profile.hashtags,
-    facts: verifiedFacts(signals),
+    facts: item.channel === "blog" ? blogFacts : verifiedFacts(signals),
     repositoryUrl: normalizeHttpUrl(signals.repositoryMetadata?.url)
       ?? `https://github.com/${item.repository}`,
   });
@@ -293,7 +317,7 @@ export async function draftGrowthContentItem(
       aiEnabled: isAiConfigured(),
       usedFallback: false,
       cached: true,
-      mediaRequired: item.media.length === 0,
+      mediaRequired: item.channel !== "blog" && item.media.length === 0,
     };
   }
 
@@ -317,7 +341,7 @@ export async function draftGrowthContentItem(
   if (aiEnabled) {
     try {
       answer = await requestDraft(item, profile, signals, mediaCandidates, allowedSources);
-      const normalized = normalizeGeneratedGrowthDraft(item.format, item.summary, answer);
+      const normalized = normalizeGeneratedGrowthDraft(item.format, item.summary, answer, item.channel);
       if (!normalized.draft) throw new AiRequestError(`AI returned a platform-invalid draft: ${normalized.issue}`);
       copy = normalized.draft;
     } catch (error) {
@@ -331,7 +355,7 @@ export async function draftGrowthContentItem(
   }
 
   let media: GrowthContentMedia[] = normalizeGrowthDraftMedia(answer?.media, mediaCandidates);
-  if (media.length === 0 && mediaCandidates.length > 0) {
+  if (item.channel !== "blog" && media.length === 0 && mediaCandidates.length > 0) {
     media = [growthContentMediaFromCandidate(mediaCandidates[0])];
   }
   const sources = normalizedSources(answer?.sources, allowedSources, item.sources);
@@ -351,6 +375,6 @@ export async function draftGrowthContentItem(
     aiEnabled,
     usedFallback,
     cached: false,
-    mediaRequired: contentItem.media.length === 0,
+    mediaRequired: contentItem.channel !== "blog" && contentItem.media.length === 0,
   };
 }

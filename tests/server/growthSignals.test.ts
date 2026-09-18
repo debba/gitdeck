@@ -88,6 +88,7 @@ beforeEach(() => {
           additions: 480,
           deletions: 20,
           changed_files: 12,
+          body: "Detailed design rationale. ".repeat(300),
         },
       };
     }
@@ -125,6 +126,7 @@ describe("Growth repository signals", () => {
     expect(signals.mergedPullRequests).toEqual([
       expect.objectContaining({ number: 42, additions: 480, deletions: 20, changedFiles: 12 }),
     ]);
+    expect(signals.mergedPullRequests[0].body).toHaveLength(6000);
     expect(signals.goals).toEqual([
       expect.objectContaining({
         id: "goal-1",

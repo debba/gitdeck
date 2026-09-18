@@ -113,6 +113,46 @@ async function renderDrawer() {
 }
 
 describe("ContentItemDrawer", () => {
+  it("exports current blog edits as Markdown and permits ready without an image", async () => {
+    const createDescriptor = Object.getOwnPropertyDescriptor(URL, "createObjectURL");
+    const revokeDescriptor = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
+    const blobs: Blob[] = [];
+    const revoke = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: (blob: Blob) => {
+      blobs.push(blob);
+      return `blob:article-${blobs.length}`;
+    } });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revoke });
+    try {
+      item = { ...item, channel: "blog", format: "doc", media: [], threadPosts: [],
+        title: "Driver isolation", body: "# Driver isolation\n\n## Tradeoffs\n\nA sourced explanation." };
+      await renderDrawer();
+      expect(button("Mark ready").disabled).toBe(false);
+      const title = document.body.querySelector<HTMLInputElement>(".growth-content-edit input")!;
+      const body = document.body.querySelector<HTMLTextAreaElement>(".growth-content-edit > label textarea")!;
+      await act(async () => {
+        setValue(title, "An updated article");
+        setValue(body, "# Updated\n\n## Implementation\n\nUnsaved code and explanation.");
+      });
+      const link = document.body.querySelector<HTMLAnchorElement>('a[download="an-updated-article.md"]');
+      expect(link?.textContent).toBe("Download Markdown");
+      const exported = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.readAsText(blobs.at(-1)!);
+      });
+      expect(exported).toContain('title: "An updated article"');
+      expect(exported).toContain("Unsaved code and explanation.");
+      expect(mocks.patchGrowthContentItem).not.toHaveBeenCalled();
+      await act(async () => { root.render(null); });
+      expect(revoke).toHaveBeenCalled();
+    } finally {
+      if (createDescriptor) Object.defineProperty(URL, "createObjectURL", createDescriptor);
+      else delete (URL as unknown as { createObjectURL?: unknown }).createObjectURL;
+      if (revokeDescriptor) Object.defineProperty(URL, "revokeObjectURL", revokeDescriptor);
+      else delete (URL as unknown as { revokeObjectURL?: unknown }).revokeObjectURL;
+    }
+  });
   it("renders content details, copies the thread, and persists inline edits", async () => {
     await renderDrawer();
 

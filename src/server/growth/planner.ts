@@ -13,6 +13,7 @@ import { normalizeGrowthPlanAssignments } from "../../utils/growth/planAssignmen
 import { deconflictGrowthPlanSlots } from "../../utils/growth/planDeconfliction";
 import { buildGrowthPlanSlots } from "../../utils/growth/planSlots";
 import { parseRepositoryName } from "../../utils/repository";
+import { GROWTH_BLOG_EDITORIAL_GUIDE } from "../../utils/growth/blogArticle";
 import { AiNotConfiguredError, generateStructured } from "../ai/client";
 import { isAiConfigured } from "../ai/settings";
 import {
@@ -20,6 +21,7 @@ import {
   createMultipleContentPlansWithItems,
   getContentPlan,
   getGrowthProfile,
+  listContentItems,
   hasOverlappingActiveContentPlan,
   replaceContentPlanWithItems,
   ActivePlanOverlapError,
@@ -103,12 +105,19 @@ function planEvidence(signals: GrowthRepositorySignals): GrowthPlanEvidence[] {
       url: signals.repositoryMetadata?.url ?? `https://github.com/${signals.repository}`,
     },
     ...signals.releases.map((release) => ({
+      kind: "release" as const,
       label: release.name || release.tag_name || "Repository release",
       url: release.html_url ?? null,
     })),
     ...signals.recentCommits.slice(0, 10).map((commit) => ({
+      kind: "engineering" as const,
       label: commit.commit.message.split("\n")[0] || "Repository update",
       url: commit.html_url,
+    })),
+    ...(signals.mergedPullRequests ?? []).slice(0, 12).map((pullRequest) => ({
+      kind: "engineering" as const,
+      label: pullRequest.title,
+      url: pullRequest.url,
     })),
     ...signals.openIssues.slice(0, 10).map((issue) => ({ label: issue.title, url: issue.url })),
     ...signals.openPullRequests.slice(0, 6).map((pullRequest) => ({
@@ -119,7 +128,7 @@ function planEvidence(signals: GrowthRepositorySignals): GrowthPlanEvidence[] {
   ];
 }
 
-function plannerContext(signals: GrowthRepositorySignals, evidence: GrowthPlanEvidence[]): Record<string, unknown> {
+function plannerContext(signals: GrowthRepositorySignals, evidence: GrowthPlanEvidence[], includeBlog: boolean): Record<string, unknown> {
   return {
     generatedOn: signals.generatedOn,
     repository: signals.repository,
@@ -134,10 +143,10 @@ function plannerContext(signals: GrowthRepositorySignals, evidence: GrowthPlanEv
       name: release.name || release.tag_name || null,
       url: release.html_url ?? null,
       publishedAt: release.published_at ?? null,
-      notesExcerpt: release.body?.replace(/\s+/g, " ").trim().slice(0, 500) || null,
+      notesExcerpt: release.body?.trim().slice(0, includeBlog ? 8000 : 500) || null,
     })),
     recentCommits: signals.recentCommits.slice(0, 10).map((commit) => ({
-      message: commit.commit.message.split("\n")[0],
+      message: includeBlog ? commit.commit.message.slice(0, 2000) : commit.commit.message.split("\n")[0],
       url: commit.html_url,
       authoredAt: commit.commit.author?.date ?? null,
     })),
@@ -153,6 +162,7 @@ function plannerContext(signals: GrowthRepositorySignals, evidence: GrowthPlanEv
       isDraft: pullRequest.isDraft,
     })),
     readmeExcerpt: signals.readme?.excerpt ?? null,
+    ...(includeBlog ? { mergedPullRequests: (signals.mergedPullRequests ?? []).slice(0, 12) } : {}),
     starHistory: signals.starHistory,
     goals: signals.goals,
     additionalSources: signals.additionalSources,
@@ -166,13 +176,19 @@ async function requestAssignments(
   profile: ReturnType<typeof getGrowthProfile>,
   signals: GrowthRepositorySignals,
   evidence: GrowthPlanEvidence[],
+  existingArticles: Array<Pick<GrowthContentItem, "title" | "angle" | "sources" | "status">>,
 ): Promise<unknown> {
+  const includeBlog = slots.some((slot) => slot.channel === "blog");
   const result = await generateStructured<PlannerAnswer>({
     instructions: [
       "Act as an ethical open-source editorial planner.",
       "Return one assignment for every supplied slot, keyed by its exact slotKey.",
       "Confirm a positive-weight pillar from the supplied profile, write a concise one-line evidence-led angle and CTA, and cite only HTTP or HTTPS URLs present in allowedEvidence.",
       "Use only supplied facts, do not imply unfinished work has shipped, and do not draft the final post.",
+      ...(includeBlog ? [
+        GROWTH_BLOG_EDITORIAL_GUIDE,
+        "For blog slots propose a specific article thesis and intended readership in angle, and a discussion or trial CTA. Balance product stories for social sharing with technical deep dives for Reddit, Hacker News and Lobsters when evidence supports both. Prioritize recent releases and merged changes; connect older architectural context only when relevant. Avoid repeating existingArticles or other blog slots. Social slots may tease a related article's thesis, but never invent its publication URL or claim a draft is published.",
+      ] : []),
       "Return JSON only.",
     ].join(" "),
     input: JSON.stringify({
@@ -188,7 +204,8 @@ async function requestAssignments(
         avoid: profile.avoid,
       },
       slots,
-      evidence: plannerContext(signals, evidence),
+      evidence: plannerContext(signals, evidence, includeBlog),
+      ...(includeBlog ? { existingArticles } : {}),
     }),
     schemaName: "growth_editorial_plan",
     schema: {
@@ -271,7 +288,12 @@ async function assignGrowthPlan(
   let candidates: unknown = [];
   if (aiEnabled && slots.length > 0) {
     try {
-      candidates = await requestAssignments(input, slots, profile, signals, evidence);
+      const existingArticles = slots.some((slot) => slot.channel === "blog")
+        ? listContentItems(accountId, { repository: input.repository })
+          .filter((item) => item.channel === "blog" && item.status !== "skipped").slice(0, 30)
+          .map(({ title, angle, sources, status }) => ({ title, angle, sources, status }))
+        : [];
+      candidates = await requestAssignments(input, slots, profile, signals, evidence, existingArticles);
     } catch (error) {
       if (!(error instanceof AiNotConfiguredError)) throw error;
     }

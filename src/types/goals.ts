@@ -26,6 +26,8 @@ export interface GoalMediaSuggestion {
 
 /** A ready-to-use deliverable that carries out one recommended action. */
 export interface GoalProposal {
+  /** Verified evidence URLs selected for a long-form article. */
+  sources?: string[];
   title: string;
   format: GoalProposalFormat;
   summary: string;
@@ -37,7 +39,12 @@ export interface GoalProposal {
   mediaSuggestions?: GoalMediaSuggestion[];
 }
 
+export const INTERVENTION_DESTINATIONS = ["blog", "social", "communities", "other"] as const;
+export type InterventionDestination = typeof INTERVENTION_DESTINATIONS[number];
+
 export interface GoalSuggestion {
+  /** Explicit deliverable destination; absent on legacy recommendations. */
+  destination?: InterventionDestination;
   title: string;
   action: string;
   category: "product" | "community" | "engineering" | "marketing";

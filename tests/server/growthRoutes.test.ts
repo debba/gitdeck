@@ -1036,6 +1036,14 @@ describe("Growth API routes", () => {
     expect(growthStore.listContentItems("account-a", { repository: "acme/failure" })).toEqual([]);
   });
 
+  it("persists the generated destination even when the article title has no blog keyword", async () => {
+    state.generateSuggestions.mockResolvedValueOnce([{ title: "Driver isolation tradeoffs", action: "Explain the protocol and share on Reddit", category: "engineering", destination: "blog" }]);
+    const generated = await dispatch("POST", "/api/growth/interventions/generate", { repository: "acme/repo" });
+    expect(generated.status).toBe(200);
+    expect(generated.body.interventions[0]).toMatchObject({ destination: "blog", title: "Driver isolation tradeoffs" });
+    expect(growthStore.getGrowthIntervention("account-a", generated.body.interventions[0].id)?.destination).toBe("blog");
+  });
+
   it("generates repository or mission interventions with dedupe and preserves user status", async () => {
     const first = await dispatch("POST", "/api/growth/interventions/generate", {
       repository: "acme/repo",
@@ -1566,6 +1574,42 @@ describe("Growth API routes", () => {
       action: "Document one clear contribution path.",
     });
     expect(growthStore.listGrowthInterventions("account-a", { repository: "acme/repo" })).toHaveLength(1);
+  });
+
+  it.each([true, false])("drafts and caches a blog article for an intervention (explicit destination: %s)", async (explicit) => {
+    const intervention = growthStore.createGrowthIntervention({
+      accountId: "account-a", repository: "acme/repo", category: "engineering", origin: "ai",
+      title: explicit ? "Driver isolation tradeoffs" : "Write a blog article about driver isolation",
+      action: "Explain the protocol, then share on Reddit and LinkedIn.", dedupeKey: "blog-driver",
+      ...(explicit ? { destination: "blog" as const } : {}),
+    });
+    const article = { title: "Driver isolation", format: "doc", summary: "For maintainers", content: "# Driver isolation\n\nIntroduction.\n\n## Design\n\nA sourced explanation.", sources: ["https://github.com/acme/repo/pull/42"], threadPosts: [], mediaSuggestions: [] };
+    state.generateProposals.mockResolvedValue([article]);
+    const first = await dispatch("POST", "/api/growth/content/draft", { interventionId: intervention.id });
+    expect(first.status).toBe(200);
+    expect(first.body.contentItems).toHaveLength(1);
+    expect(first.body.contentItems[0]).toMatchObject({ interventionId: intervention.id, channel: "blog", format: "doc", body: article.content, media: [], sources: article.sources, status: "draft" });
+    expect(state.generateProposals).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ destination: "blog" }), []);
+    const id = first.body.contentItems[0].id;
+    expect((await dispatch("POST", "/api/growth/content/draft", { interventionId: intervention.id })).body).toMatchObject({ cached: true, contentItems: [{ id }] });
+    expect(state.generateProposals).toHaveBeenCalledTimes(1);
+    expect((await dispatch("POST", "/api/growth/content/draft", { interventionId: intervention.id, refresh: true })).body.contentItems[0].id).toBe(id);
+    expect((await dispatch("PATCH", `/api/growth/content/${id}`, { status: "ready" })).status).toBe(200);
+    const refreshed = await dispatch("POST", "/api/growth/content/draft", { interventionId: intervention.id, refresh: true });
+    expect(refreshed.body.contentItems[0].id).not.toBe(id);
+    expect(growthStore.getContentItem("account-a", id)?.status).toBe("ready");
+    state.activeAccountId = "account-b";
+    expect((await dispatch("POST", "/api/growth/content/draft", { interventionId: intervention.id })).status).toBe(404);
+  });
+
+  it("does not accept a social campaign or persist content when blog generation fails", async () => {
+    const intervention = growthStore.createGrowthIntervention({ accountId: "account-a", repository: "acme/repo", category: "engineering", origin: "ai", title: "Driver isolation", action: "Explain it", dedupeKey: "blog-failure", destination: "blog" });
+    const wrongFormat = await dispatch("POST", "/api/growth/content/draft", { interventionId: intervention.id });
+    expect(wrongFormat.status).toBe(502);
+    expect(wrongFormat.body.error).toBe("AI returned no blog article");
+    state.generateProposals.mockRejectedValueOnce(new AiRequestError("provider failed"));
+    expect((await dispatch("POST", "/api/growth/content/draft", { interventionId: intervention.id })).status).toBe(502);
+    expect(growthStore.listContentItems("account-a", { repository: "acme/repo" })).toEqual([]);
   });
 
   it("drafts intervention content idempotently and refreshes only editable items", async () => {

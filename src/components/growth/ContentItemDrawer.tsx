@@ -18,6 +18,7 @@ import { CloseIcon } from "../common/Icons";
 import { Markdown } from "../common/Markdown";
 import { GrowthMediaActions } from "./GrowthMediaActions";
 import { GrowthMediaPicker } from "./GrowthMediaPicker";
+import { GrowthBlogExport } from "./GrowthBlogExport";
 
 interface ContentItemDrawerProps {
   item: GrowthContentItem;
@@ -191,6 +192,7 @@ export function ContentItemDrawer({ item, onClose, onUpdate }: ContentItemDrawer
 
           <section className="growth-content-section">
             <div className="growth-content-section-head"><h3>{t("growth.contentCopyTitle")}</h3><CopyButton label={t("growth.contentCopyText")} text={body} /></div>
+            {item.channel === "blog" ? <GrowthBlogExport item={{ ...item, title, body }} /> : null}
             <Markdown className="growth-content-markdown">{body || t("growth.contentBodyEmpty")}</Markdown>
             {item.format === "x-thread" && threadPosts.length ? (
               <div className="growth-content-copy-thread"><CopyButton label={t("goals.copyThread")} text={formatXThreadForCopy({ content: body, threadPosts })} /></div>
@@ -259,6 +261,7 @@ export function ContentItemDrawer({ item, onClose, onUpdate }: ContentItemDrawer
               repository={item.repository}
               media={item.media}
               status={item.status}
+              channel={item.channel}
               disabled={busy !== ""}
               onChange={saveMedia}
             />
@@ -289,7 +292,7 @@ export function ContentItemDrawer({ item, onClose, onUpdate }: ContentItemDrawer
                   className="btn ghost"
                   type="button"
                   key={status}
-                  disabled={busy !== "" || (status === "ready" && item.media.length === 0)}
+                  disabled={busy !== "" || (status === "ready" && item.channel !== "blog" && item.media.length === 0)}
                   onClick={() => changeStatus(status)}
                 >
                   {t(`growth.contentSetStatus.${status}` as TranslationKey)}
@@ -303,7 +306,7 @@ export function ContentItemDrawer({ item, onClose, onUpdate }: ContentItemDrawer
             </div>
             <label>{t("growth.contentPublishedUrlLabel")}<input type="url" value={publishedUrl} placeholder="https://" onChange={(event) => setPublishedUrl(event.target.value)} /></label>
             <button className="btn primary" type="button" disabled={busy !== ""} onClick={markPublished}>{busy === "publish" ? t("growth.contentPublishing") : t("growth.contentMarkPublished")}</button>
-            <p className="growth-content-media-rule">{t("growth.contentMediaRule")}</p>
+            <p className="growth-content-media-rule">{t(item.channel === "blog" ? "growth.blogMediaRule" : "growth.contentMediaRule")}</p>
           </section>
         </div>
       </aside>

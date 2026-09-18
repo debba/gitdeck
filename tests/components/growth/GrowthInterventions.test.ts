@@ -162,6 +162,54 @@ function button(label: string): HTMLButtonElement {
 }
 
 describe("GrowthInterventions", () => {
+  it("groups existing interventions by destination with status sections and filtered counts", async () => {
+    mocks.fetchGrowthContentItems.mockResolvedValue([]);
+    mocks.fetchGrowthInterventions.mockResolvedValue([
+      intervention("blog", "proposed", { title: "Write a blog article", category: "engineering" }),
+      intervention("blog-done", "done", { title: "Publish a technical deep dive", category: "engineering" }),
+      intervention("social", "accepted", { title: "Launch an X thread" }),
+      intervention("community", "proposed", { title: "Discuss the design on Hacker News", category: "community" }),
+      intervention("operational", "proposed", { title: "Fix onboarding", category: "product" }),
+    ]);
+    await renderPanel();
+
+    expect([...container.querySelectorAll(".growth-intervention-group > header h2")].map((element) => element.textContent))
+      .toEqual(["Blog", "Social", "Communities", "Other"]);
+    expect(container.querySelector(".destination-blog > header > span")?.textContent).toBe("2");
+    expect(container.querySelector(".destination-blog .status-proposed")?.textContent).toContain("Write a blog article");
+    expect(container.querySelector(".destination-blog .status-done")?.textContent).toContain("technical deep dive");
+    expect(container.querySelector(".destination-social .status-accepted")?.textContent).toContain("Launch an X thread");
+    expect(container.querySelector(".destination-communities")?.textContent).toContain("Discuss the design on Hacker News");
+    expect(container.querySelectorAll(".growth-intervention-card")).toHaveLength(5);
+
+    const category = container.querySelector<HTMLSelectElement>(".growth-interventions-filters select")!;
+    await act(async () => {
+      category.value = "engineering";
+      category.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(container.querySelectorAll(".growth-intervention-card")).toHaveLength(2);
+    expect(container.querySelector(".destination-social > header > span")?.textContent).toBe("0");
+    expect(container.querySelector(".destination-other")).toBeNull();
+    expect(container.querySelectorAll(".growth-intervention-group")).toHaveLength(3);
+  });
+
+  it("keeps dismissed interventions collapsed independently in each destination", async () => {
+    mocks.fetchGrowthContentItems.mockResolvedValue([]);
+    mocks.fetchGrowthInterventions.mockResolvedValue([
+      intervention("blog-dismissed", "dismissed", { title: "Write a blog article" }),
+      intervention("social-dismissed", "dismissed", { title: "Post on LinkedIn" }),
+    ]);
+    await renderPanel();
+    expect(container.querySelectorAll(".growth-intervention-card")).toHaveLength(0);
+    const blogToggle = container.querySelector<HTMLButtonElement>(".destination-blog .growth-intervention-group-toggle")!;
+    const socialToggle = container.querySelector<HTMLButtonElement>(".destination-social .growth-intervention-group-toggle")!;
+    await act(async () => blogToggle.click());
+    expect(blogToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(socialToggle.getAttribute("aria-expanded")).toBe("false");
+    expect(container.querySelector(".destination-blog .growth-intervention-card")?.textContent).toContain("Write a blog article");
+    expect(container.querySelector(".destination-social .growth-intervention-card")).toBeNull();
+  });
+
   it("renders status groups, linked goals and content while keeping dismissed actions collapsed", async () => {
     await renderPanel();
 
@@ -451,7 +499,7 @@ describe("GrowthInterventions", () => {
     }
 
     expect(mocks.scanGrowthOpportunities).toHaveBeenCalledTimes(2);
-    expect(container.querySelectorAll(".growth-intervention-card h3"))
+    expect(container.querySelectorAll(".growth-intervention-card h4"))
       .toHaveLength(2);
     expect(container.querySelector(".status-accepted")?.textContent).toContain("Share release v2");
     expect(container.textContent).toContain("Generate interventions");

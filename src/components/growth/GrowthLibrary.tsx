@@ -248,6 +248,7 @@ export function GrowthLibrary({ accountId, enabled, repository, repos }: GrowthL
                 <span>{t("growth.libraryChannelsEyebrow")}</span>
                 <h2>{t("growth.libraryChannelsTitle")}</h2>
                 <p>{t("growth.libraryChannelsDescription")}</p>
+                <p>{t("growth.blogPlanningHelp")}</p>
               </div>
             </div>
             <div className="growth-library-channel-grid">

@@ -116,6 +116,10 @@ beforeEach(async () => {
   state.collectSignals.mockReset();
   state.collectSignals.mockResolvedValue(signals());
   state.generateStructured.mockReset();
+  state.generateStructured.mockImplementation(async ({ schemaName }: { schemaName: string }) => {
+    if (schemaName !== "growth_editorial_review") throw new Error(`Unexpected generation: ${schemaName}`);
+    return { data: { scores: { grounding: 5, specificity: 4, readerValue: 4, structure: 4 }, issues: [], blockingIssues: [] } };
+  });
 });
 
 afterAll(async () => {
@@ -124,6 +128,55 @@ afterAll(async () => {
 });
 
 describe("Growth content drafter", () => {
+  it("drafts full Markdown from merged implementation evidence and allows a text-only workflow", async () => {
+    state.aiConfigured = true;
+    const source = "https://github.com/acme/rocket/pull/42";
+    const notes = "Detailed release context. ".repeat(50);
+    state.collectSignals.mockResolvedValueOnce({ ...signals(),
+      releases: [{ name: "v2", body: notes }],
+      mergedPullRequests: [{ number: 42, title: "Isolate drivers", url: source,
+        mergedAt: "2026-09-03T00:00:00Z", body: "JSON-RPC over stdin/stdout isolates crashes.",
+        additions: 120, deletions: 20, changedFiles: 4 }],
+    });
+    const idea = store.createContentItem({ accountId: "account-a", repository: "acme/rocket",
+      channel: "blog", format: "doc", pillar: "engineering", angle: "The cost of driver isolation", sources: [source] });
+    const body = `# The cost of driver isolation\n\n${"A sourced explanation. ".repeat(400)}\n\n## Tradeoffs\n\n[Implementation](${source})`;
+    state.generateStructured.mockResolvedValueOnce({ data: {
+      title: "The cost of driver isolation", body, threadPosts: [], sources: [source], media: [],
+    } });
+
+    const result = await draftGrowthContentItem("account-a", idea.id);
+    expect(result).toMatchObject({ aiEnabled: true, usedFallback: false, mediaRequired: false,
+      contentItem: { body, sources: [source], media: [], threadPosts: [], status: "draft" } });
+    const request = state.generateStructured.mock.calls[0][0];
+    expect(request.maxOutputTokens).toBeGreaterThanOrEqual(6000);
+    expect(request.instructions).toContain("Hacker News");
+    const context = JSON.parse(request.input).verifiedSignals;
+    expect(context.releases[0].notesExcerpt).toBe(notes);
+    expect(context.mergedPullRequests[0].body).toContain("JSON-RPC");
+    expect(context.allowedSources).toContain(source);
+    expect(store.updateContentItem("account-a", idea.id, { status: "ready" })?.status).toBe("ready");
+    expect(store.updateContentItem("account-a", idea.id, {
+      status: "scheduled", scheduledFor: "2026-09-21T10:00:00Z",
+    })?.status).toBe("scheduled");
+    expect(store.markContentItemPublished("account-a", idea.id)?.status).toBe("published");
+    expect(() => store.updateContentItem("account-a", idea.id, { channel: "x" })).toThrow();
+  });
+
+  it("keeps blog fallback notes scoped to the selected source", async () => {
+    const source = "https://github.com/acme/rocket/pull/42";
+    state.collectSignals.mockResolvedValueOnce({ ...signals(), mergedPullRequests: [{
+      number: 42, title: "Isolate drivers", url: source, body: "Verified driver design", mergedAt: "2026-09-03",
+      additions: 120, deletions: 20, changedFiles: 4,
+    }] });
+    const idea = store.createContentItem({ accountId: "account-a", repository: "acme/rocket",
+      channel: "blog", format: "doc", sources: [source] });
+    const result = await draftGrowthContentItem("account-a", idea.id);
+    expect(result?.contentItem.body).toContain("Verified driver design");
+    expect(result?.contentItem.body).not.toContain("Release v2");
+    expect(result?.usedFallback).toBe(true);
+    expect(result?.mediaRequired).toBe(false);
+  });
   it("creates deterministic evidence-grounded fallback copy and uses an account-scoped asset", async () => {
     store.upsertGrowthProfile("account-a", "acme/rocket", profileInput());
     insertAsset();
@@ -178,7 +231,7 @@ describe("Growth content drafter", () => {
 
     const result = await draftGrowthContentItem("account-a", idea.id);
 
-    expect(state.generateStructured).toHaveBeenCalledTimes(1);
+    expect(state.generateStructured).toHaveBeenCalledTimes(2);
     const requestInput = JSON.parse(state.generateStructured.mock.calls[0][0].input) as Record<string, any>;
     expect(requestInput.verifiedSignals).toMatchObject({
       slot: { angle: idea.angle, pillar: "product", cta: idea.summary },
@@ -197,7 +250,7 @@ describe("Growth content drafter", () => {
   it("rejects platform-invalid AI output without changing the idea", async () => {
     state.aiConfigured = true;
     const idea = createIdea("mastodon-post");
-    state.generateStructured.mockResolvedValueOnce({
+    state.generateStructured.mockResolvedValue({
       provider: "test",
       model: "test",
       data: { title: "Invalid", body: "x".repeat(501), threadPosts: [], sources: [], media: [] },
@@ -205,6 +258,34 @@ describe("Growth content drafter", () => {
 
     await expect(draftGrowthContentItem("account-a", idea.id)).rejects.toBeInstanceOf(AiRequestError);
     expect(store.getContentItem("account-a", idea.id)).toEqual(idea);
+  });
+
+  it("keeps stored content unchanged when editorial review fails after one revision", async () => {
+    state.aiConfigured = true;
+    const idea = createIdea("linkedin-post");
+    const weak = { title: "Generic update", body: "An amazing project. Try it today.", threadPosts: [], sources: [], media: [] };
+    const critique = { scores: { grounding: 3, specificity: 1, readerValue: 1, structure: 3 }, issues: ["Replace generic praise with a documented mechanism."], blockingIssues: ["The claimed capability is not supported."] };
+    state.generateStructured.mockResolvedValueOnce({ data: weak }).mockResolvedValueOnce({ data: critique })
+      .mockResolvedValueOnce({ data: weak }).mockResolvedValueOnce({ data: critique });
+    await expect(draftGrowthContentItem("account-a", idea.id)).rejects.toThrow(/did not pass/);
+    expect(store.getContentItem("account-a", idea.id)).toEqual(idea);
+    expect(state.generateStructured).toHaveBeenCalledTimes(4);
+  });
+
+  it("includes only the same account and repository's earlier content for originality checks", async () => {
+    state.aiConfigured = true;
+    for (const [accountId, repository, title] of [
+      ["account-a", "acme/rocket", "Earlier protocol article"],
+      ["account-b", "acme/rocket", "Another account"],
+      ["account-a", "acme/other", "Another repository"],
+    ]) {
+      store.createContentItem({ accountId, repository, channel: "linkedin", format: "linkedin-post", title, body: "Existing explanation", status: "draft" });
+    }
+    const idea = createIdea("linkedin-post");
+    state.generateStructured.mockResolvedValueOnce({ data: { title: "New angle", body: "A new supported explanation", threadPosts: [], sources: [], media: [] } });
+    await draftGrowthContentItem("account-a", idea.id);
+    const context = JSON.parse(state.generateStructured.mock.calls[0][0].input).verifiedSignals;
+    expect(context.recentContentToAvoidRepeating.map((entry: { title: string }) => entry.title)).toEqual(["Earlier protocol article"]);
   });
 
   it.each(["ready", "scheduled", "published", "skipped"] as const)(
@@ -230,7 +311,7 @@ describe("Growth content drafter", () => {
   it("caches populated drafts and refreshes editable content in place", async () => {
     state.aiConfigured = true;
     const idea = createIdea("linkedin-post");
-    state.generateStructured.mockResolvedValue({
+    state.generateStructured.mockResolvedValueOnce({
       provider: "test",
       model: "test",
       data: { title: "First title", body: "Verified repository update.", threadPosts: [], sources: [], media: [] },
@@ -238,7 +319,7 @@ describe("Growth content drafter", () => {
     const first = await draftGrowthContentItem("account-a", idea.id);
     const cached = await draftGrowthContentItem("account-a", idea.id);
     expect(cached).toMatchObject({ cached: true, contentItem: { id: idea.id, title: "First title" } });
-    expect(state.generateStructured).toHaveBeenCalledTimes(1);
+    expect(state.generateStructured).toHaveBeenCalledTimes(2);
 
     state.generateStructured.mockResolvedValueOnce({
       provider: "test",
@@ -247,7 +328,7 @@ describe("Growth content drafter", () => {
     });
     const refreshed = await draftGrowthContentItem("account-a", idea.id, { refresh: true });
     expect(refreshed).toMatchObject({ cached: false, contentItem: { id: idea.id, title: "Refreshed title" } });
-    expect(state.generateStructured).toHaveBeenCalledTimes(2);
+    expect(state.generateStructured).toHaveBeenCalledTimes(4);
     expect(await draftGrowthContentItem("account-b", idea.id)).toBeNull();
   });
 });

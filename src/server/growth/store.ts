@@ -76,6 +76,7 @@ interface GrowthProfileRow {
 }
 
 interface GrowthInterventionRow {
+  destination: GrowthIntervention["destination"];
   id: string;
   account_id: string;
   repository: string;
@@ -319,6 +320,10 @@ export function ensureGrowthSchema(): void {
     CREATE INDEX IF NOT EXISTS content_performance_account_content
       ON content_performance(account_id, content_id);
   `);
+  const interventionColumns = all<{ name: string }>("PRAGMA table_info(growth_interventions)", []);
+  if (!interventionColumns.some(({ name }) => name === "destination")) {
+    getDatabase().exec("ALTER TABLE growth_interventions ADD COLUMN destination TEXT CHECK(destination IN ('blog', 'social', 'communities', 'other'))");
+  }
 }
 
 function parseJson<T>(value: string, fallback: T): T {
@@ -406,6 +411,7 @@ export function upsertGrowthProfile(
 
 function interventionFromRow(row: GrowthInterventionRow): GrowthIntervention {
   return {
+    destination: row.destination ?? null,
     id: row.id,
     accountId: row.account_id,
     repository: row.repository,
@@ -465,8 +471,8 @@ export function createGrowthIntervention(input: CreateGrowthInterventionInput): 
   const now = new Date().toISOString();
   run(
     `INSERT INTO growth_interventions
-      (id, account_id, repository, goal_id, category, title, action, origin, rule_key, dedupe_key, status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, account_id, repository, goal_id, category, title, action, origin, rule_key, dedupe_key, status, created_at, updated_at, destination)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       input.accountId,
@@ -481,6 +487,7 @@ export function createGrowthIntervention(input: CreateGrowthInterventionInput): 
       input.status ?? "proposed",
       now,
       now,
+      input.destination ?? null,
     ],
   );
   return getGrowthIntervention(input.accountId, id)!;
@@ -508,9 +515,9 @@ export function upsertGrowthIntervention(input: CreateGrowthInterventionInput): 
   const updatedAt = new Date().toISOString();
   run(
     `UPDATE growth_interventions SET
-       goal_id = ?, category = ?, title = ?, action = ?, dedupe_key = ?, updated_at = ?
+       goal_id = ?, category = ?, title = ?, action = ?, dedupe_key = ?, updated_at = ?, destination = ?
      WHERE account_id = ? AND id = ?`,
-    [goalId, input.category, input.title, input.action, dedupeKey, updatedAt, input.accountId, existing.id],
+    [goalId, input.category, input.title, input.action, dedupeKey, updatedAt, input.destination ?? existing.destination ?? null, input.accountId, existing.id],
   );
   return getGrowthIntervention(input.accountId, existing.id)!;
 }
@@ -968,7 +975,7 @@ export function validateContentMediaAttachments(
 
 function validateContentItem(item: GrowthContentItem): void {
   validateContentMediaAttachments(item.accountId, item.repository, item.media);
-  if (MEDIA_REQUIRED_STATUSES.has(item.status) && item.media.length === 0) {
+  if (item.channel !== "blog" && MEDIA_REQUIRED_STATUSES.has(item.status) && item.media.length === 0) {
     throw new MediaRequiredError();
   }
   if (item.status === "scheduled" && !isValidIsoDateTime(item.scheduledFor)) {
@@ -1445,9 +1452,9 @@ function upsertLegacyIntervention(
   if (existing) {
     run(
       `UPDATE growth_interventions
-       SET category = ?, title = ?, action = ?, origin = 'ai', rule_key = NULL, dedupe_key = ?, updated_at = ?
+       SET category = ?, title = ?, action = ?, origin = 'ai', rule_key = NULL, dedupe_key = ?, updated_at = ?, destination = ?
        WHERE account_id = ? AND id = ?`,
-      [suggestion.category, suggestion.title, suggestion.action, dedupeKey, createdAt, accountId, existing.id],
+      [suggestion.category, suggestion.title, suggestion.action, dedupeKey, createdAt, suggestion.destination ?? existing.destination ?? null, accountId, existing.id],
     );
     return existing.id;
   }
@@ -1455,8 +1462,8 @@ function upsertLegacyIntervention(
   const id = randomUUID();
   run(
     `INSERT INTO growth_interventions
-      (id, account_id, repository, goal_id, category, title, action, origin, rule_key, dedupe_key, status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'ai', NULL, ?, 'proposed', ?, ?)`,
+      (id, account_id, repository, goal_id, category, title, action, origin, rule_key, dedupe_key, status, created_at, updated_at, destination)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'ai', NULL, ?, 'proposed', ?, ?, ?)`,
     [
       id,
       accountId,
@@ -1468,6 +1475,7 @@ function upsertLegacyIntervention(
       dedupeKey,
       createdAt,
       createdAt,
+      suggestion.destination ?? null,
     ],
   );
   return id;
@@ -1490,7 +1498,9 @@ function insertLegacyProposal(
     planId: null,
     interventionId,
     goalIds: [goalId],
-    channel: legacyProposalChannel(proposal.format),
+    channel: proposal.format === "doc" && get<GrowthInterventionRow>(
+      "SELECT * FROM growth_interventions WHERE account_id = ? AND id = ?", [accountId, interventionId],
+    )?.destination === "blog" ? "blog" : legacyProposalChannel(proposal.format),
     format: proposal.format,
     pillar: "",
     angle: "",
@@ -1499,7 +1509,7 @@ function insertLegacyProposal(
     body: proposal.content,
     threadPosts: proposal.threadPosts ?? [],
     media: legacyMediaToContentMedia(proposal.mediaSuggestions),
-    sources: [],
+    sources: proposal.sources ?? [],
     status: "draft",
     scheduledFor: null,
     publishedAt: null,
@@ -1593,6 +1603,7 @@ function contentItemToLegacyProposal(item: GrowthContentItem): GoalProposal {
     format: item.format,
     summary: item.summary,
     content: item.body,
+    ...(item.channel === "blog" ? { sources: item.sources } : {}),
     ...(item.threadPosts.length > 0 ? { threadPosts: item.threadPosts } : {}),
     ...(mediaSuggestions.length > 0 ? { mediaSuggestions } : {}),
   };
@@ -1612,6 +1623,7 @@ export function projectLegacyGoalSuggestions(accountId: string, goalId: string):
       title: intervention.title,
       action: intervention.action,
       category: intervention.category,
+      ...(intervention.destination ? { destination: intervention.destination } : {}),
       ...(items.length > 0 ? {
         proposals: items.map(contentItemToLegacyProposal),
         proposalsGeneratedAt: items[0].generatedAt,
