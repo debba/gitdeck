@@ -8,6 +8,7 @@
     -webkit-tap-highlight-color: transparent;
   }
   body { background: var(--bg-grad); min-height: 100vh; overflow-x: hidden; }
+  #root { display: flex; flex-direction: column; min-height: 100vh; }
   button, input, select { font: inherit; color: inherit; }
   a { color: inherit; text-decoration: none; }
   a:hover { text-decoration: underline; }
