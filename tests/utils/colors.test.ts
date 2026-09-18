@@ -29,9 +29,10 @@ describe("color utilities", () => {
       "--label-g": "202",
       "--label-b": "4",
     });
-    expect(vars && vars["--label-h"]).toMatch(/^\d+$/);
-    expect(vars && vars["--label-s"]).toMatch(/^\d+$/);
-    expect(vars && vars["--label-l"]).toMatch(/^\d+$/);
+    const customProperties = vars as Record<string, string>;
+    expect(customProperties["--label-h"]).toMatch(/^\d+$/);
+    expect(customProperties["--label-s"]).toMatch(/^\d+$/);
+    expect(customProperties["--label-l"]).toMatch(/^\d+$/);
   });
 
   it("accepts hex colors with leading hash", () => {

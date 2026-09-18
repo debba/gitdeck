@@ -520,7 +520,7 @@
     transition: color .15s ease, background .15s ease;
     white-space: nowrap;
   }
-  .tab:hover { color: var(--text); background: var(--hover-surface); }
+  .tab:hover { color: var(--text); background: var(--hover-surface); text-decoration: none; }
   .tab.active {
     color: var(--text);
     background: linear-gradient(180deg, var(--panel-3), var(--panel-2));

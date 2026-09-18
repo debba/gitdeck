@@ -20,9 +20,10 @@ import { WelcomeModal } from "./components/modals/WelcomeModal";
 import { CommandPalette } from "./components/modals/CommandPalette";
 import { Footer } from "./components/Footer";
 import { TopBar } from "./components/TopBar";
+import { PreferencesView } from "./components/views/PreferencesView";
 import { SidebarControls, type InboxSidebarState } from "./components/SidebarControls";
 import { Pagination } from "./components/common/Pagination";
-import { BoardIcon, BookIcon, ExportIcon, InboxIcon, IssueIcon, LoadingIcon, PulseIcon } from "./components/common/Icons";
+import { AlertIcon, BoardIcon, BookIcon, CIIcon, DigestIcon, ExportIcon, GoalIcon, InboxIcon, InsightsIcon, IssueIcon, LoadingIcon, PullRequestIcon } from "./components/common/Icons";
 import { IssueList } from "./components/views/IssueList";
 import { PullRequestList } from "./components/views/PullRequestList";
 import { DailyDigestView } from "./components/views/DailyDigestView";
@@ -82,6 +83,8 @@ const TAB_ROUTES: Record<Tab, string> = {
   ci: "/ci",
   digests: "/daily",
 };
+
+const PREFERENCES_ROUTE = "/preferences";
 
 const ROUTE_TABS = new Map<string, Tab>(Object.entries(TAB_ROUTES).map(([tab, route]) => [route, tab as Tab]));
 const DETAIL_TABS = new Set<DetailTab>(["overview", "actions", "commits", "pull-requests", "issues", "milestones", "releases", "branches", "forks", "traffic", "mentions", "discussions", "dependents"]);
@@ -168,6 +171,9 @@ export function App() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = tabFromPath(location.pathname);
+  const isPreferencesPage = location.pathname === PREFERENCES_ROUTE;
+  // `view` is null on the preferences page so no dashboard tab content renders there.
+  const view: Tab | null = isPreferencesPage ? null : tab;
   const routeRepoName = searchParams.get("repo") || "";
   const repoDetailTab = detailTabFromParams(searchParams);
   const routeMetricKind = metricKindFromParams(searchParams);
@@ -372,8 +378,9 @@ export function App() {
     document.body.classList.toggle("tab-alerts", tab === "alerts");
     document.body.classList.toggle("tab-ci", tab === "ci");
     document.body.classList.toggle("tab-digests", tab === "digests");
+    document.body.classList.toggle("route-preferences", isPreferencesPage);
     document.body.classList.toggle("filters-open", filtersOpen);
-  }, [tab, filtersOpen]);
+  }, [tab, filtersOpen, isPreferencesPage]);
 
   useEffect(() => {
     if (location.pathname === "/" || location.pathname === "/index.html") {
@@ -694,11 +701,11 @@ export function App() {
     { key: "inbox" as const, label: t("tabs.inbox"), count: issues.length + pullRequests.length, ready: inboxLoaded, icon: <InboxIcon /> },
     { key: "repos" as const, label: t("tabs.repositories"), count: repos.length, ready: reposLoaded, icon: <BookIcon /> },
     { key: "issues" as const, label: t("tabs.issues"), count: issues.length, ready: issuesLoaded, icon: <IssueIcon /> },
-    { key: "prs" as const, label: t("tabs.pullRequests"), count: pullRequests.length, ready: prsLoaded, icon: <PulseIcon /> },
-    { key: "insights" as const, label: t("tabs.insights"), count: filteredInsights.length, ready: insightsLoaded, icon: <PulseIcon /> },
-    { key: "alerts" as const, label: t("tabs.alerts"), count: totalSecurityAlerts, ready: insightsLoaded, icon: <PulseIcon /> },
-    { key: "ci" as const, label: t("tabs.ci"), count: ciHealth.length, ready: ciLoaded, icon: <PulseIcon /> },
-    { key: "digests" as const, label: t("tabs.digest"), count: dailyDigests.length, ready: digestsLoaded, icon: <PulseIcon /> },
+    { key: "prs" as const, label: t("tabs.pullRequests"), count: pullRequests.length, ready: prsLoaded, icon: <PullRequestIcon /> },
+    { key: "insights" as const, label: t("tabs.insights"), count: filteredInsights.length, ready: insightsLoaded, icon: <InsightsIcon /> },
+    { key: "alerts" as const, label: t("tabs.alerts"), count: totalSecurityAlerts, ready: insightsLoaded, icon: <AlertIcon /> },
+    { key: "ci" as const, label: t("tabs.ci"), count: ciHealth.length, ready: ciLoaded, icon: <CIIcon /> },
+    { key: "digests" as const, label: t("tabs.digest"), count: dailyDigests.length, ready: digestsLoaded, icon: <DigestIcon /> },
     ...(projectsEnabled
       ? [{ key: "kanban" as const, label: t("tabs.board"), count: boardCount, ready: boardLoaded, icon: <BoardIcon /> }]
       : []),
@@ -722,6 +729,8 @@ export function App() {
         onRefresh={() => loadData(dataRequirementsForTab(tab, Boolean(routeRepoName), repoDetailTab), true)}
         onOpenFilters={() => setFiltersOpen(true)}
         onOpenPalette={() => setPaletteOpen(true)}
+        onOpenPreferencesPage={() => navigate(PREFERENCES_ROUTE)}
+        preferencesPageActive={isPreferencesPage}
         onLogout={() => void handleLogout()}
         canLogout={authMode === "device"}
       />
@@ -749,6 +758,18 @@ export function App() {
         />
         <main className={`main${dataStale ? " data-stale" : ""}`}>
           {error ? <div className="error">{error}</div> : null}
+          {isPreferencesPage ? (
+            <PreferencesView
+              theme={theme}
+              textSize={textSize}
+              hideArchivedNoise={hideArchivedNoise}
+              onThemeChange={setTheme}
+              onTextSizeChange={setTextSize}
+              onHideArchivedNoiseChange={setHideArchivedNoise}
+              onBack={() => navigate(TAB_ROUTES[tab])}
+            />
+          ) : null}
+          {view ? (
           <div className="view-head">
             <div className="tabs" role="tablist">
               {tabs.map((item) => (
@@ -760,10 +781,15 @@ export function App() {
                   ) : null}
                 </button>
               ))}
+              <a className="tab" href="/growth" target="_blank" rel="noopener">
+                <GoalIcon />
+                {t("tabs.growthStudio")}
+              </a>
             </div>
           </div>
+          ) : null}
 
-          {tab === "inbox" ? (
+          {view === "inbox" ? (
             <InboxView
               items={mailboxItems}
               mailboxLabel={t(`mailbox.${mailbox}`)}
@@ -779,7 +805,7 @@ export function App() {
             />
           ) : null}
 
-          {tab === "issues" ? (
+          {view === "issues" ? (
             <div className="view-issues" style={{ display: "block" }}>
               <section className="stats">
                 <div className="stat"><div className="k">{t("stats.openIssues")}</div><div className="v">{countText(filteredIssues.length, issuesLoaded)}</div><div className="sub">{t("stats.matchingFilters")}</div></div>
@@ -807,7 +833,7 @@ export function App() {
             </div>
           ) : null}
 
-          {tab === "prs" ? (
+          {view === "prs" ? (
             <div className="view-prs" style={{ display: "block" }}>
               <section className="stats">
                 <div className="stat"><div className="k">{t("stats.openPrs")}</div><div className="v">{countText(filteredPullRequests.length, prsLoaded)}</div><div className="sub">{t("stats.matchingFilters")}</div></div>
@@ -851,7 +877,7 @@ export function App() {
             </div>
           ) : null}
 
-          {tab === "repos" ? (
+          {view === "repos" ? (
             <div className="view-repos" style={{ display: "block" }}>
               <section className="stats">
                 <div className="stat"><div className="k">{t("stats.repositories")}</div><div className="v">{countText(filteredRepos.length, reposLoaded)}</div><div className="sub">{t("stats.matchingFilters")}</div></div>
@@ -892,7 +918,7 @@ export function App() {
             </div>
           ) : null}
 
-          {tab === "insights" ? (
+          {view === "insights" ? (
             <div className="view-insights" style={{ display: "block" }}>
               <section className="stats">
                 <div className="stat"><div className="k">{t("stats.averageHealth")}</div><div className="v">{countText(averageHealth, insightsLoaded)}</div><div className="sub">{t("stats.acrossTrackedRepos")}</div></div>
@@ -904,7 +930,7 @@ export function App() {
             </div>
           ) : null}
 
-          {tab === "alerts" ? (
+          {view === "alerts" ? (
             <div className="view-alerts" style={{ display: "block" }}>
               <section className="stats">
                 <div className="stat"><div className="k">{t("alerts.totalAlerts")}</div><div className="v">{countText(totalSecurityAlerts, insightsLoaded)}</div><div className="sub">{t("alerts.affectedRepos", { count: countText(securityRepoCount, insightsLoaded) })}</div></div>
@@ -922,7 +948,7 @@ export function App() {
             </div>
           ) : null}
 
-          {tab === "ci" ? (
+          {view === "ci" ? (
             (() => {
               const totalRuns = ciHealth.reduce((sum, entry) => sum + entry.totalRuns, 0);
               const totalFailures = ciHealth.reduce((sum, entry) => sum + entry.failureCount, 0);
@@ -944,7 +970,7 @@ export function App() {
             })()
           ) : null}
 
-          {tab === "digests" ? (
+          {view === "digests" ? (
             <div className="view-digests" style={{ display: "block" }}>
               <section className="stats">
                 <div className="stat"><div className="k">{digestPeriod === "day" ? t("stats.digestDays") : digestPeriod === "week" ? t("stats.digestWeeks") : t("stats.digestMonths")}</div><div className="v">{countText(dailyDigests.length, digestsLoaded)}</div><div className="sub">{digestPeriod === "day" ? t("stats.daysWithSavedSnapshots") : t("stats.periodsAggregated")}</div></div>
@@ -957,7 +983,7 @@ export function App() {
             </div>
           ) : null}
 
-          {tab === "kanban" && projectsEnabled ? <KanbanView onCountChange={(count) => { setBoardCount(count); setBoardLoaded(true); }} /> : null}
+          {view === "kanban" && projectsEnabled ? <KanbanView onCountChange={(count) => { setBoardCount(count); setBoardLoaded(true); }} /> : null}
         </main>
       </div>
       <Footer

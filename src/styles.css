@@ -9,3 +9,12 @@
 @import "./styles/inbox.css";
 @import "./styles/footer.css";
 @import "./styles/preferences.css";
+@import "./styles/goals.css";
+@import "./styles/growth/shell.css";
+@import "./styles/growth/home.css";
+@import "./styles/growth/overview.css";
+@import "./styles/growth/interventions.css";
+@import "./styles/growth/content-drawer.css";
+@import "./styles/growth/library.css";
+@import "./styles/growth/calendar.css";
+@import "./styles/growth/review.css";
