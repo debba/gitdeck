@@ -43,6 +43,7 @@ export function KanbanView({ onCountChange }: KanbanViewProps) {
       onCountChange?.(result.projects.length);
     } catch (err) {
       setError((err as Error).message);
+      onCountChange?.(projects.length);
     } finally {
       setLoading(false);
     }
