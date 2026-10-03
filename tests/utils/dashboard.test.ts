@@ -151,6 +151,9 @@ describe("dashboard utilities", () => {
       search: "contrast",
       orgs: new Set(["acme"]),
       repos: new Set(["acme/app"]),
+      boards: new Set(),
+      excludedBoards: new Set(),
+      boardMode: "include",
       labels: new Set(["bug"]),
       authors: new Set(),
       excludedAuthors: new Set(),
@@ -168,6 +171,9 @@ describe("dashboard utilities", () => {
       search: "",
       orgs: new Set(),
       repos: new Set(),
+      boards: new Set(),
+      excludedBoards: new Set(),
+      boardMode: "include",
       labels: new Set(),
       authors: new Set(),
       excludedAuthors: new Set(["alice"]),
@@ -185,6 +191,9 @@ describe("dashboard utilities", () => {
       search: "",
       orgs: new Set(),
       repos: new Set(),
+      boards: new Set(),
+      excludedBoards: new Set(),
+      boardMode: "include",
       labels: new Set(),
       authors: new Set(["alice", "bob"]),
       excludedAuthors: new Set(["bob"]),
@@ -195,6 +204,124 @@ describe("dashboard utilities", () => {
     }, "alice");
 
     expect(result.map((issue) => issue.number)).toEqual([1]);
+  });
+
+  it("counts issues per board", () => {
+    const facets = buildIssueFacets([
+      { ...issues[0], boards: ["acme/Roadmap", "acme/Triage"] },
+      { ...issues[1], boards: ["acme/Roadmap"] },
+    ]);
+
+    expect([...facets.boards.entries()]).toEqual([["acme/Roadmap", 2], ["acme/Triage", 1]]);
+  });
+
+  it("filters issues by selected boards", () => {
+    const result = filterIssues([
+      { ...issues[0], boards: ["acme/Roadmap"] },
+      { ...issues[1], boards: [] },
+    ], {
+      search: "",
+      orgs: new Set(),
+      repos: new Set(),
+      boards: new Set(["acme/Roadmap"]),
+      excludedBoards: new Set(),
+      boardMode: "include",
+      labels: new Set(),
+      authors: new Set(),
+      excludedAuthors: new Set(),
+      authorMode: "include",
+      assignees: new Set(),
+      dates: { cf: "", ct: "", uf: "", ut: "" },
+      preset: "",
+    }, "alice");
+
+    expect(result.map((issue) => issue.number)).toEqual([1]);
+  });
+
+  it("excludes issues on excluded boards", () => {
+    const result = filterIssues([
+      { ...issues[0], boards: ["acme/Roadmap"] },
+      { ...issues[1], boards: [] },
+    ], {
+      search: "",
+      orgs: new Set(),
+      repos: new Set(),
+      boards: new Set(),
+      excludedBoards: new Set(["acme/Roadmap"]),
+      boardMode: "exclude",
+      labels: new Set(),
+      authors: new Set(),
+      excludedAuthors: new Set(),
+      authorMode: "include",
+      assignees: new Set(),
+      dates: { cf: "", ct: "", uf: "", ut: "" },
+      preset: "",
+    }, "alice");
+
+    expect(result.map((issue) => issue.number)).toEqual([2]);
+  });
+
+  it("includes and excludes boards at the same time", () => {
+    const result = filterIssues([
+      { ...issues[0], boards: ["acme/Roadmap"] },
+      { ...issues[1], boards: ["acme/Roadmap", "acme/Triage"] },
+    ], {
+      search: "",
+      orgs: new Set(),
+      repos: new Set(),
+      boards: new Set(["acme/Roadmap"]),
+      excludedBoards: new Set(["acme/Triage"]),
+      boardMode: "exclude",
+      labels: new Set(),
+      authors: new Set(),
+      excludedAuthors: new Set(),
+      authorMode: "include",
+      assignees: new Set(),
+      dates: { cf: "", ct: "", uf: "", ut: "" },
+      preset: "",
+    }, "alice");
+
+    expect(result.map((issue) => issue.number)).toEqual([1]);
+  });
+
+  it("ignores excluded boards when issues carry no board data", () => {
+    const result = filterIssues(issues, {
+      search: "",
+      orgs: new Set(),
+      repos: new Set(),
+      boards: new Set(),
+      excludedBoards: new Set(["acme/Roadmap"]),
+      boardMode: "exclude",
+      labels: new Set(),
+      authors: new Set(),
+      excludedAuthors: new Set(),
+      authorMode: "include",
+      assignees: new Set(),
+      dates: { cf: "", ct: "", uf: "", ut: "" },
+      preset: "",
+    }, "alice");
+
+    expect(result.map((issue) => issue.number)).toEqual([1, 2]);
+  });
+
+  it("ignores selected boards when issues carry no board data", () => {
+    const result = filterIssues(issues, {
+      search: "",
+      orgs: new Set(),
+      repos: new Set(),
+      boards: new Set(["acme/Roadmap"]),
+      excludedBoards: new Set(),
+      boardMode: "include",
+      labels: new Set(),
+      authors: new Set(),
+      excludedAuthors: new Set(),
+      authorMode: "include",
+      assignees: new Set(),
+      dates: { cf: "", ct: "", uf: "", ut: "" },
+      preset: "",
+    }, "alice");
+
+    expect(result.map((issue) => issue.number)).toEqual([1, 2]);
   });
 
   it("filters repositories by visibility and language", () => {

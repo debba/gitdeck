@@ -22,6 +22,7 @@ export interface GhIssue {
   labels: GhLabel[];
   commentsCount: number;
   assignees?: GhUser[];
+  boards?: string[];
 }
 
 export type ReviewDecision = "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
