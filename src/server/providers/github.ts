@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { readUpstreamJson, requireUpstreamJson } from "../upstream";
+import { isGatewayTimeoutStatus, shrinkPageSize } from "../../utils/graphqlPaging";
 import type {
   GhIssue,
   GhLabel,
@@ -262,6 +263,10 @@ export class GitHubProvider implements Provider {
       body: JSON.stringify({ query, variables }),
     });
     if (response.status === 401) throw new GitHubAuthRequiredError();
+    if (isGatewayTimeoutStatus(response.status)) {
+      await response.body?.cancel();
+      throw new GitHubGatewayTimeoutError(this.config.label, response.status);
+    }
     const json = await requireUpstreamJson<{ data?: T; errors?: { message: string }[] } | null>(this.config.label, response);
     if (json?.errors?.length) throw new Error(json.errors.map((entry) => entry.message).join("; "));
     if (!json?.data) throw new Error("Empty GraphQL response");
@@ -379,8 +384,19 @@ export class GitHubProvider implements Provider {
     const q = `is:pr is:open ${owners.map((owner) => `user:${owner}`).join(" ")}`.trim();
     const collected: GhPullRequest[] = [];
     let cursor: string | null = null;
-    for (let page = 0; page < 10; page++) {
-      const data: PullRequestSearchResponse = await this.gqlCall<PullRequestSearchResponse>(account, PR_SEARCH_QUERY, { q, cursor });
+    let pageSize = PR_SEARCH_PAGE_SIZE;
+    while (collected.length < PR_SEARCH_MAX_RESULTS) {
+      let data: PullRequestSearchResponse;
+      try {
+        data = await this.gqlCall<PullRequestSearchResponse>(account, PR_SEARCH_QUERY, { q, cursor, pageSize });
+      } catch (error) {
+        // Diff stats and review decisions are expensive to resolve; a large page can
+        // exceed GitHub's GraphQL time budget, so retry the same cursor with fewer items.
+        const smaller = error instanceof GitHubGatewayTimeoutError ? shrinkPageSize(pageSize, PR_SEARCH_MIN_PAGE_SIZE) : null;
+        if (smaller === null) throw error;
+        pageSize = smaller;
+        continue;
+      }
       for (const raw of data.search.nodes) {
         if (raw.__typename !== "PullRequest") continue;
         const node = raw as PullRequestSearchNode;
@@ -508,6 +524,13 @@ export class GitHubAuthRequiredError extends Error {
   }
 }
 
+export class GitHubGatewayTimeoutError extends Error {
+  constructor(service: string, readonly status: number) {
+    super(`${service} returned HTTP ${status} (the GraphQL query likely timed out)`);
+    this.name = "GitHubGatewayTimeoutError";
+  }
+}
+
 const REPO_LIST_QUERY = `
 query($owner: String!, $cursor: String) {
   repositoryOwner(login: $owner) {
@@ -546,9 +569,13 @@ query($q: String!, $cursor: String) {
   }
 }`;
 
+const PR_SEARCH_PAGE_SIZE = 25;
+const PR_SEARCH_MIN_PAGE_SIZE = 5;
+const PR_SEARCH_MAX_RESULTS = 1000;
+
 const PR_SEARCH_QUERY = `
-query($q: String!, $cursor: String) {
-  search(query: $q, type: ISSUE, first: 100, after: $cursor) {
+query($q: String!, $cursor: String, $pageSize: Int!) {
+  search(query: $q, type: ISSUE, first: $pageSize, after: $cursor) {
     issueCount
     pageInfo { endCursor hasNextPage }
     nodes {
