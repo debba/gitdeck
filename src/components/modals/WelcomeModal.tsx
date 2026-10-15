@@ -18,7 +18,7 @@ export function WelcomeModal({ onClose, onViewChangelog }: WelcomeModalProps) {
             <span className="modal-icon welcome">✦</span>
             <div style={{ minWidth: 0 }}>
               <div className="kind">{t("welcome.kind")}</div>
-              <h3>gh-dashboard</h3>
+              <h3>{t("app.title")}</h3>
             </div>
           </div>
           <button className="modal-close" aria-label={t("common.close")} onClick={onClose}><CloseIcon /></button>

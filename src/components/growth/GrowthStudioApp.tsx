@@ -56,7 +56,7 @@ const DASHBOARD_BODY_CLASSES = [
 ];
 
 function initialTheme(): GrowthTheme {
-  const stored = localStorage.getItem("gh-dash.theme");
+  const stored = localStorage.getItem("gitdeck.theme");
   return stored === "light" || stored === "auto" ? stored : "dark";
 }
 
@@ -115,7 +115,7 @@ export function GrowthStudioApp() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem("gh-dash.theme", theme);
+    localStorage.setItem("gitdeck.theme", theme);
   }, [theme]);
 
   useEffect(() => {

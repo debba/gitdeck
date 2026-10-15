@@ -3,7 +3,7 @@
  * loads can display last-known values immediately (avoiding a flash of zeros).
  */
 
-const STORAGE_PREFIX = "gh-dash.cache.";
+const STORAGE_PREFIX = "gitdeck.cache.";
 
 // Arrays typed as unknown[] to avoid coupling this module to the full GitHub types.
 // The consumer casts them back (e.g. `as GhRepo[]`) — the cache is just a pass-through.

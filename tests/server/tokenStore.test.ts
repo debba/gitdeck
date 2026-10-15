@@ -5,7 +5,7 @@ const { TMP_DIR } = vi.hoisted(() => {
   const { tmpdir } = require("node:os") as typeof import("node:os");
   const { resolve } = require("node:path") as typeof import("node:path");
   return {
-    TMP_DIR: resolve(tmpdir(), `gh-dash-tokenstore-${process.pid}-${Date.now()}`),
+    TMP_DIR: resolve(tmpdir(), `gitdeck-tokenstore-${process.pid}-${Date.now()}`),
   };
 });
 

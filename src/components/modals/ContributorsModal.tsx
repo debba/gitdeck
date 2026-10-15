@@ -15,7 +15,7 @@ interface Contributor {
   type: string;
 }
 
-const REPO = "debba/gh-dashboard";
+const REPO = "debba/gitdeck";
 
 export function ContributorsModal({ onClose }: ContributorsModalProps) {
   const { t } = useI18n();

@@ -4,7 +4,10 @@ import { App } from "./App";
 import { GrowthStudioApp } from "./components/growth/GrowthStudioApp";
 import { AccountProvider } from "./contexts/AccountContext";
 import { I18nProvider } from "./i18n/I18nProvider";
+import { migrateLegacyStorage } from "./utils/storageMigration";
 import "./styles.css";
+
+migrateLegacyStorage();
 
 function RouteAwareApp() {
   const { pathname } = useLocation();

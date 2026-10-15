@@ -63,7 +63,7 @@ export function beginDashboardLoad(tab: DashboardTab, resources: Set<DashboardRe
       if (metrics.length > MAX_METRICS) metrics.splice(0, metrics.length - MAX_METRICS);
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("gitdeck:dashboard-load", { detail: metric }));
-        if (localStorage.getItem("gh-dash.diagnostics") === "1") {
+        if (localStorage.getItem("gitdeck.diagnostics") === "1") {
           console.info("[gitdeck:load]", metric);
         }
       }

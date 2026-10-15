@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://repostars.dev/?repos=debba%2Fgh-dashboard&theme=dark"><img src="https://repostars.dev/api/embed?repo=debba%2Fgh-dashboard&theme=dark" alt="RepoStars" /></a>
+  <a href="https://repostars.dev/?repos=debba%2Fgitdeck&theme=dark"><img src="https://repostars.dev/api/embed?repo=debba%2Fgitdeck&theme=dark" alt="RepoStars" /></a>
 </p>
 
 An open-source, local dashboard to explore repositories, issues, pull requests, traffic, and CI activity across multiple accounts on GitHub, GitLab, and Forgejo-compatible forges (Codeberg, self-hosted) — from a single interface.
@@ -239,7 +239,7 @@ The dashboard can obtain a GitHub token in three different ways. Pick the one th
 
 In `gh-cli` and `token` modes the device-flow sign-in screen is hidden; the server treats the configured source as authoritative.
 
-Tokens and snapshots are persisted under `~/.gitdeck/`. Mission goals, Growth Studio data, and server-side preferences are stored in `~/.gitdeck/gitdeck.sqlite`. If you previously ran an older build that stored data in `~/.gh-issues-dashboard/`, the server migrates it automatically on first start.
+Tokens and snapshots are persisted under `~/.gitdeck/`. Mission goals, Growth Studio data, and server-side preferences are stored in `~/.gitdeck/gitdeck.sqlite`. The server automatically migrates data from older installations on first start. Browser preferences and cached dashboard data also migrate automatically to the Gitdeck storage keys.
 
 ### Extending persisted preferences and mission metrics
 
@@ -311,7 +311,7 @@ Then open <http://127.0.0.1:8765>.
 
 A multi-stage `Dockerfile` and a `docker-compose.yml` are provided. The image builds the server + SPA bundle and runs as a non-root user; tokens and snapshots are persisted to a named volume mounted at `/home/node/.gitdeck`.
 
-If you already have an older compose file, make sure the persistent volume is mounted at `/home/node/.gitdeck` and not the legacy `/home/node/.gh-issues-dashboard` path, otherwise the login state will not survive restarts.
+If you already have an older compose file, update the persistent volume mount to `/home/node/.gitdeck` so the login state survives restarts.
 
 With Docker Compose (recommended):
 
@@ -360,7 +360,7 @@ Tests live under `tests/` and mirror the structure of `src/` (see [AGENTS.md](AG
 Base dashboard loads retain the latest 50 measurements in memory, including time to first content, total duration, cache hits, deduplicated requests, and network requests. In the browser console, enable per-load logging with:
 
 ```js
-localStorage.setItem("gh-dash.diagnostics", "1")
+localStorage.setItem("gitdeck.diagnostics", "1")
 ```
 
 Provider-side call counts and timings are available from `GET /api/diagnostics/provider-metrics`. Set `GITDECK_DIAGNOSTICS=1` to also log every measured provider operation on the server.

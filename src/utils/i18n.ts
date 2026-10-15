@@ -3,7 +3,7 @@ import { translations, type TranslationKey } from "../i18n/translations";
 export type Language = keyof typeof translations;
 
 export const DEFAULT_LANGUAGE: Language = "en";
-export const LANGUAGE_STORAGE_KEY = "gh-dash.language";
+export const LANGUAGE_STORAGE_KEY = "gitdeck.language";
 export const SUPPORTED_LANGUAGES = Object.keys(translations) as Language[];
 
 type Replacements = Record<string, string | number>;

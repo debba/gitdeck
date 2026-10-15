@@ -194,7 +194,7 @@ export function App() {
   const [repoInsights, setRepoInsights] = useState<RepoInsight[]>([]);
   const [visibleRepoInsightNames, setVisibleRepoInsightNames] = useState<string[]>([]);
   const [dailyDigests, setDailyDigests] = useState<DailyDigestEntry[]>([]);
-  const [digestPeriod, setDigestPeriod] = useState<DigestPeriod>(() => (localStorage.getItem("gh-dash.digestPeriod") as DigestPeriod) || "day");
+  const [digestPeriod, setDigestPeriod] = useState<DigestPeriod>(() => (localStorage.getItem("gitdeck.digestPeriod") as DigestPeriod) || "day");
   const [ciHealth, setCiHealth] = useState<RepoCIHealth[]>([]);
   const [insightsLoaded, setInsightsLoaded] = useState(false);
   const [ciLoaded, setCiLoaded] = useState(false);
@@ -205,17 +205,17 @@ export function App() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [contributorsOpen, setContributorsOpen] = useState(false);
   const [changelogOpen, setChangelogOpen] = useState(false);
-  const [welcomeOpen, setWelcomeOpen] = useState(() => !localStorage.getItem("gh-dash.welcomeSeen"));
+  const [welcomeOpen, setWelcomeOpen] = useState(() => !localStorage.getItem("gitdeck.welcomeSeen"));
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [notifications, setNotifications] = useState<GhNotification[]>([]);
   const [pollInterval, setPollInterval] = useState(60);
   const [mailbox, setMailbox] = useState<InboxMailbox>("inbox");
   const [inboxPage, setInboxPage] = useState(1);
-  const [inboxPageSize, setInboxPageSize] = useState(Number(localStorage.getItem("gh-dash.inboxPageSize")) || 20);
+  const [inboxPageSize, setInboxPageSize] = useState(Number(localStorage.getItem("gitdeck.inboxPageSize")) || 20);
   const [inboxSearch, setInboxSearch] = useState("");
-  const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem("gh-dash.theme") as Theme) || "dark");
-  const [textSize, setTextSize] = useState<TextSize>(() => (localStorage.getItem("gh-dash.textSize") as TextSize) || "normal");
-  const [hideArchivedNoise, setHideArchivedNoise] = useState(() => localStorage.getItem("gh-dash.hideArchivedNoise") !== "0");
+  const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem("gitdeck.theme") as Theme) || "dark");
+  const [textSize, setTextSize] = useState<TextSize>(() => (localStorage.getItem("gitdeck.textSize") as TextSize) || "normal");
+  const [hideArchivedNoise, setHideArchivedNoise] = useState(() => localStorage.getItem("gitdeck.hideArchivedNoise") !== "0");
   const [issueFilters, setIssueFilters] = useState<IssueFilters>(() => cachedFiltersOnMount?.hydrated.issueFilters ?? defaultIssueFilters());
   const [prFilters, setPrFilters] = useState<PullRequestFilters>(() => cachedFiltersOnMount?.hydrated.prFilters ?? defaultPrFilters());
   const [repoFilters, setRepoFilters] = useState<RepoFilters>(() => cachedFiltersOnMount?.hydrated.repoFilters ?? defaultRepoFilters());
@@ -227,9 +227,9 @@ export function App() {
   const [issuePage, setIssuePage] = useState(1);
   const [prPage, setPrPage] = useState(1);
   const [repoPage, setRepoPage] = useState(1);
-  const [issuePageSize, setIssuePageSize] = useState(Number(localStorage.getItem("gh-dash.issuesPageSize")) || 20);
-  const [prPageSize, setPrPageSize] = useState(Number(localStorage.getItem("gh-dash.prsPageSize")) || 20);
-  const [repoPageSize, setRepoPageSize] = useState(Number(localStorage.getItem("gh-dash.reposPageSize")) || 20);
+  const [issuePageSize, setIssuePageSize] = useState(Number(localStorage.getItem("gitdeck.issuesPageSize")) || 20);
+  const [prPageSize, setPrPageSize] = useState(Number(localStorage.getItem("gitdeck.prsPageSize")) || 20);
+  const [repoPageSize, setRepoPageSize] = useState(Number(localStorage.getItem("gitdeck.reposPageSize")) || 20);
   const handleBaseAuthRequired = useCallback(() => {
     setAuthState("anonymous");
     setAuthLogin(null);
@@ -332,7 +332,7 @@ export function App() {
   }, [tab, authState, digestPeriod, activeAccountId]);
 
   useEffect(() => {
-    localStorage.setItem("gh-dash.digestPeriod", digestPeriod);
+    localStorage.setItem("gitdeck.digestPeriod", digestPeriod);
   }, [digestPeriod]);
 
   async function handleLogout() {
@@ -360,16 +360,16 @@ export function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem("gh-dash.theme", theme);
+    localStorage.setItem("gitdeck.theme", theme);
   }, [theme]);
 
   useEffect(() => {
     document.documentElement.dataset.textSize = textSize;
-    localStorage.setItem("gh-dash.textSize", textSize);
+    localStorage.setItem("gitdeck.textSize", textSize);
   }, [textSize]);
 
   useEffect(() => {
-    localStorage.setItem("gh-dash.hideArchivedNoise", hideArchivedNoise ? "1" : "0");
+    localStorage.setItem("gitdeck.hideArchivedNoise", hideArchivedNoise ? "1" : "0");
   }, [hideArchivedNoise]);
 
   useEffect(() => {
@@ -410,10 +410,10 @@ export function App() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  useEffect(() => localStorage.setItem("gh-dash.issuesPageSize", String(issuePageSize)), [issuePageSize]);
-  useEffect(() => localStorage.setItem("gh-dash.prsPageSize", String(prPageSize)), [prPageSize]);
-  useEffect(() => localStorage.setItem("gh-dash.reposPageSize", String(repoPageSize)), [repoPageSize]);
-  useEffect(() => localStorage.setItem("gh-dash.inboxPageSize", String(inboxPageSize)), [inboxPageSize]);
+  useEffect(() => localStorage.setItem("gitdeck.issuesPageSize", String(issuePageSize)), [issuePageSize]);
+  useEffect(() => localStorage.setItem("gitdeck.prsPageSize", String(prPageSize)), [prPageSize]);
+  useEffect(() => localStorage.setItem("gitdeck.reposPageSize", String(repoPageSize)), [repoPageSize]);
+  useEffect(() => localStorage.setItem("gitdeck.inboxPageSize", String(inboxPageSize)), [inboxPageSize]);
 
   const refreshNotifications = useCallback(async (fresh = false) => {
     try {
@@ -1011,11 +1011,11 @@ export function App() {
       {welcomeOpen ? (
         <WelcomeModal
           onClose={() => {
-            localStorage.setItem("gh-dash.welcomeSeen", "1");
+            localStorage.setItem("gitdeck.welcomeSeen", "1");
             setWelcomeOpen(false);
           }}
           onViewChangelog={() => {
-            localStorage.setItem("gh-dash.welcomeSeen", "1");
+            localStorage.setItem("gitdeck.welcomeSeen", "1");
             setWelcomeOpen(false);
             setChangelogOpen(true);
           }}
