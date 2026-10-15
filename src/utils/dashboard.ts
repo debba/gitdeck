@@ -47,7 +47,7 @@ export interface RepoFilters {
   includeArchived: boolean;
 }
 
-export type FacetValue = number | { count: number; color?: string };
+export type FacetValue = number | { count: number; color?: string; label?: string };
 
 export function issueCountForRepo(issues: GhIssue[], nameWithOwner: string, fallback = 0): number {
   const count = issues.filter((issue) => issue.repository.nameWithOwner === nameWithOwner).length;
@@ -68,7 +68,7 @@ export function buildIssueFacets(issues: GhIssue[]) {
   const facets = {
     orgs: new Map<string, number>(),
     repos: new Map<string, number>(),
-    boards: new Map<string, number>(),
+    boards: new Map<string, { count: number; label: string; number: number }>(),
     labels: new Map<string, { count: number; color?: string }>(),
     authors: new Map<string, number>(),
     assignees: new Map<string, number>(),
@@ -79,7 +79,7 @@ export function buildIssueFacets(issues: GhIssue[]) {
     facets.orgs.set(owner, (facets.orgs.get(owner) || 0) + 1);
     facets.repos.set(issue.repository.nameWithOwner, (facets.repos.get(issue.repository.nameWithOwner) || 0) + 1);
     for (const board of issue.boards || []) {
-      facets.boards.set(board, (facets.boards.get(board) || 0) + 1);
+      facets.boards.set(board.id, { count: (facets.boards.get(board.id)?.count || 0) + 1, label: board.name, number: board.number });
     }
     for (const label of issue.labels || []) {
       facets.labels.set(label.name, { count: (facets.labels.get(label.name)?.count || 0) + 1, color: label.color });
@@ -90,6 +90,11 @@ export function buildIssueFacets(issues: GhIssue[]) {
     }
   }
 
+  const names = new Map<string, number>();
+  for (const board of facets.boards.values()) names.set(board.label, (names.get(board.label) || 0) + 1);
+  for (const board of facets.boards.values()) {
+    if ((names.get(board.label) || 0) > 1) board.label += ` (#${board.number})`;
+  }
   return facets;
 }
 
@@ -160,8 +165,8 @@ export function filterIssues(issues: GhIssue[], filters: IssueFilters, userLogin
     if (filters.repos.size && !filters.repos.has(issue.repository.nameWithOwner)) return false;
     if (filterByBoard) {
       const boards = issue.boards || [];
-      if (filters.boards.size && !boards.some((board) => filters.boards.has(board))) return false;
-      if (boards.some((board) => filters.excludedBoards.has(board))) return false;
+      if (filters.boards.size && !boards.some((board) => filters.boards.has(board.id))) return false;
+      if (boards.some((board) => filters.excludedBoards.has(board.id))) return false;
     }
     if (filters.labels.size && ![...(issue.labels || []).map((label) => label.name)].some((label) => filters.labels.has(label))) return false;
     const author = issue.author?.login || "";

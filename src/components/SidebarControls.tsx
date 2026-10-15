@@ -20,7 +20,7 @@ export interface InboxSidebarState {
 type IssueLikeFacets = {
   orgs: Map<string, number>;
   repos: Map<string, number>;
-  boards?: Map<string, number>;
+  boards?: Map<string, { count: number; label: string }>;
   labels: Map<string, { count: number; color?: string }>;
   authors: Map<string, number>;
   assignees: Map<string, number>;
@@ -62,6 +62,10 @@ function countOf(value: FacetValue): number {
   return typeof value === "number" ? value : value.count;
 }
 
+function labelOf(name: string, value: FacetValue): string {
+  return typeof value === "number" ? name : value.label ?? name;
+}
+
 function CheckList({
   entries,
   selected,
@@ -87,7 +91,7 @@ function CheckList({
       if (a[0] === userLogin && b[0] !== userLogin) return 1;
       if (b[0] === userLogin && a[0] !== userLogin) return -1;
     }
-    return countOf(b[1]) - countOf(a[1]) || a[0].localeCompare(b[0]);
+    return countOf(b[1]) - countOf(a[1]) || labelOf(...a).localeCompare(labelOf(...b));
   });
   if (!sorted.length) return <div style={{ padding: 8, color: "var(--muted-2)", fontSize: 12 }}>{t("common.noMatches")}</div>;
 
@@ -101,7 +105,7 @@ function CheckList({
             {showSwatch && color ? <span className="label-swatch" style={{ background: `#${color}` }} /> : null}
             {languageDot ? <span className="label-swatch" style={{ borderRadius: "50%", background: getLanguageColor(name) }} /> : null}
             {showGhAvatar ? <img src={`https://github.com/${name}.png?size=32`} alt="" loading="lazy" referrerPolicy="no-referrer" style={{ width: 16, height: 16, borderRadius: "50%", flexShrink: 0 }} /> : null}
-            <span className="label-text">{name}</span>
+            <span className="label-text">{labelOf(name, value)}</span>
             <span className="label-count">{countOf(value)}</span>
           </label>
         );
@@ -295,7 +299,7 @@ export function SidebarControls({
                 ))}
               </div>
               <CheckList
-                entries={[...(issueFacets.boards ?? new Map<string, number>()).entries()]}
+                entries={[...(issueFacets.boards ?? new Map<string, { count: number; label: string }>()).entries()]}
                 selected={activeBoardSelection}
                 onToggle={(value) => {
                   const boards = new Set(issueFilters.boards);

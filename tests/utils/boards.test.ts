@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { hasBoards, openBoardNames } from "../../src/utils/boards";
-import type { GhIssue } from "../../src/types/github";
+import { hasBoards, isProjectsAccessError, openBoards } from "../../src/utils/boards";
+import type { GhBoard, GhIssue } from "../../src/types/github";
 
-function issue(boards?: string[]): GhIssue {
+const roadmap: GhBoard = { id: "PVT_roadmap", number: 1, name: "acme/Roadmap" };
+
+function issue(boards?: GhBoard[]): GhIssue {
   return {
     repository: { name: "app", nameWithOwner: "acme/app" },
     title: "Fix dark mode contrast",
@@ -16,40 +18,47 @@ function issue(boards?: string[]): GhIssue {
   };
 }
 
-describe("board utilities", () => {
-  it("names open boards by owner and title", () => {
-    const names = openBoardNames([
-      { project: { title: "Roadmap", closed: false, owner: { login: "acme" } } },
-      { project: { title: "Triage", closed: false, owner: { login: "alice" } } },
-    ]);
+const project = { id: roadmap.id, number: roadmap.number, title: "Roadmap", closed: false, owner: { login: "acme" } };
 
-    expect(names).toEqual(["acme/Roadmap", "alice/Triage"]);
+describe("board utilities", () => {
+  it("keeps a stable project ID separate from its display name", () => {
+    expect(openBoards([{ project }])).toEqual([roadmap]);
+    expect(openBoards([{ project: { ...project, title: "New roadmap" } }])).toEqual([{ ...roadmap, name: "acme/New roadmap" }]);
   });
 
-  it("skips closed, hidden and duplicate boards", () => {
-    const names = openBoardNames([
-      { project: { title: "Roadmap", closed: false, owner: { login: "acme" } } },
-      { project: { title: "Roadmap", closed: false, owner: { login: "acme" } } },
-      { project: { title: "Archive", closed: true, owner: { login: "acme" } } },
-      { project: null },
-      null,
-    ]);
+  it("keeps distinct projects with the same owner and title", () => {
+    expect(openBoards([{ project }, { project: { ...project, id: "PVT_other", number: 2 } }])).toHaveLength(2);
+  });
 
-    expect(names).toEqual(["acme/Roadmap"]);
+  it("skips closed, hidden and duplicate project IDs", () => {
+    expect(openBoards([{ project }, { project }, { project: { ...project, id: "PVT_closed", closed: true } }, { project: null }, null])).toEqual([roadmap]);
   });
 
   it("falls back to the title when the owner is unknown", () => {
-    expect(openBoardNames([{ project: { title: "Roadmap", closed: false, owner: null } }])).toEqual(["Roadmap"]);
+    expect(openBoards([{ project: { ...project, owner: null } }])).toEqual([{ ...roadmap, name: "Roadmap" }]);
   });
 
   it("returns no boards when project items are missing", () => {
-    expect(openBoardNames(undefined)).toEqual([]);
-    expect(openBoardNames(null)).toEqual([]);
+    expect(openBoards(undefined)).toEqual([]);
+    expect(openBoards(null)).toEqual([]);
   });
 
   it("detects whether any issue sits on a board", () => {
-    expect(hasBoards([issue(), issue(["acme/Roadmap"])])).toBe(true);
+    expect(hasBoards([issue(), issue([roadmap])])).toBe(true);
     expect(hasBoards([issue(), issue([])])).toBe(false);
     expect(hasBoards([])).toBe(false);
+  });
+
+  it.each([
+    "Resource not accessible by personal access token",
+    "Your token has not been granted the required scopes to execute this query.",
+    "The field requires one of the following scopes: ['read:project']",
+    "Resource not accessible by integration",
+  ])("recognizes Projects access errors: %s", (message) => {
+    expect(isProjectsAccessError(message)).toBe(true);
+  });
+
+  it.each(["HTTP 503 Service Unavailable", "rate limit exceeded", "fetch failed", "Unknown field 'projectItems'"])("preserves unrelated errors: %s", (message) => {
+    expect(isProjectsAccessError(message)).toBe(false);
   });
 });

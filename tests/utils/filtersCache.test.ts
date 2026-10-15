@@ -98,13 +98,13 @@ describe("filtersCache", () => {
   });
 
   it("round-trips selected issue boards", () => {
-    const issue = { ...makeDefaultIssueFilters(), boards: new Set(["acme/Roadmap"]), excludedBoards: new Set(["acme/Triage"]), boardMode: "exclude" as const };
+    const issue = { ...makeDefaultIssueFilters(), boards: new Set(["PVT_roadmap"]), excludedBoards: new Set(["PVT_triage"]), boardMode: "exclude" as const };
     writeFiltersCache(makeDefaultRepoFilters(), issue, makeDefaultPrFilters());
 
     const hydrated = hydrateFilters(readFiltersCache()!);
 
-    expect([...hydrated.issueFilters.boards]).toEqual(["acme/Roadmap"]);
-    expect([...hydrated.issueFilters.excludedBoards]).toEqual(["acme/Triage"]);
+    expect([...hydrated.issueFilters.boards]).toEqual(["PVT_roadmap"]);
+    expect([...hydrated.issueFilters.excludedBoards]).toEqual(["PVT_triage"]);
     expect(hydrated.issueFilters.boardMode).toBe("exclude");
   });
 
@@ -135,7 +135,7 @@ describe("filtersCache", () => {
   it("returns null when boards is not a string array", () => {
     writeFiltersCache(makeDefaultRepoFilters(), makeDefaultIssueFilters(), makeDefaultPrFilters());
     const raw = JSON.parse(localStorage.getItem("gh-dash.cache.filters")!);
-    raw.issueFilters.boards = "acme/Roadmap";
+    raw.issueFilters.boards = "PVT_roadmap";
     localStorage.setItem("gh-dash.cache.filters", JSON.stringify(raw));
 
     expect(readFiltersCache()).toBeNull();

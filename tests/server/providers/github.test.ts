@@ -57,8 +57,8 @@ describe("GitHubProvider.listIssues", () => {
       ...issueNode,
       projectItems: {
         nodes: [
-          { project: { title: "Roadmap", closed: false, owner: { login: "acme" } } },
-          { project: { title: "Archive", closed: true, owner: { login: "acme" } } },
+          { project: { id: "PVT_roadmap", number: 1, title: "Roadmap", closed: false, owner: { login: "acme" } } },
+          { project: { id: "PVT_archive", number: 2, title: "Archive", closed: true, owner: { login: "acme" } } },
         ],
       },
     }]));
@@ -66,7 +66,7 @@ describe("GitHubProvider.listIssues", () => {
 
     const issues = await new GitHubProvider(config).listIssues(account, ["acme"]);
 
-    expect(issues.map((issue) => issue.boards)).toEqual([["acme/Roadmap"]]);
+    expect(issues.map((issue) => issue.boards)).toEqual([[{ id: "PVT_roadmap", name: "acme/Roadmap", number: 1 }]]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -83,6 +83,40 @@ describe("GitHubProvider.listIssues", () => {
 
     expect(issues.map((issue) => issue.number)).toEqual([1]);
     expect(issues[0].boards).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([502, 503, 504])("does not drop board data after HTTP %s", async (status) => {
+    const fetchMock = vi.fn(async () => json({ message: "Service Unavailable" }, status));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(new GitHubProvider(config).listIssues(account, ["acme"])).rejects.toThrow();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves network errors without disabling boards", async () => {
+    const fetchMock = vi.fn(async () => { throw new TypeError("fetch failed"); });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(new GitHubProvider(config).listIssues(account, ["acme"])).rejects.toThrow("fetch failed");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves unrelated GraphQL errors without disabling boards", async () => {
+    const fetchMock = vi.fn(async () => json({ errors: [{ message: "API rate limit exceeded" }] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(new GitHubProvider(config).listIssues(account, ["acme"])).rejects.toThrow("rate limit");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("supports fine-grained token access errors", async () => {
+    const fetchMock = vi.fn(async (_url, init?: RequestInit) => requestsBoards(init)
+      ? json({ errors: [{ message: "Resource not accessible by personal access token" }] })
+      : searchResult([issueNode]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect((await new GitHubProvider(config).listIssues(account, ["acme"]))[0].boards).toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
