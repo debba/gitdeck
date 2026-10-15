@@ -15,14 +15,11 @@ const APP_ROUTES = new Set([
   "/ci",
   "/daily",
   "/board",
-  "/goals",
-  "/preferences",
   "/alert",
 ]);
 
 export function isAppRoute(pathname: string): boolean {
-  const isGrowthRoute = pathname === "/growth" || pathname.startsWith("/growth/");
-  return APP_ROUTES.has(pathname) || (isGrowthRoute && isClientRoutePath(pathname));
+  return APP_ROUTES.has(pathname);
 }
 
 /** Paths whose last segment has no extension are client-side routes, not assets. */

@@ -10,7 +10,6 @@ interface AccountSwitcherProps {
   authLogin: string | null;
   /** Whether the current auth mode supports signing out from the UI. */
   canLogout: boolean;
-  onAccountChange?: () => void;
   onSignOut: () => void;
 }
 
@@ -26,7 +25,7 @@ const SIGN_OUT_ICON = (
  * Single account control at the right end of the top bar: shows who is signed
  * in, switches between accounts, adds or removes them, and signs out.
  */
-export function AccountSwitcher({ authLogin, canLogout, onAccountChange, onSignOut }: AccountSwitcherProps) {
+export function AccountSwitcher({ authLogin, canLogout, onSignOut }: AccountSwitcherProps) {
   const { accounts, active, switchAccount, removeAccount } = useAccounts();
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -55,10 +54,8 @@ export function AccountSwitcher({ authLogin, canLogout, onAccountChange, onSignO
 
   async function handleSelect(id: string) {
     setOpen(false);
-    if (id === active?.id) return;
     try {
       await switchAccount(id);
-      onAccountChange?.();
     } catch {
       // refresh effect surfaces the error
     }
@@ -85,7 +82,6 @@ export function AccountSwitcher({ authLogin, canLogout, onAccountChange, onSignO
     }
     try {
       await removeAccount(action.id);
-      onAccountChange?.();
     } catch {
       // refresh effect surfaces the error
     }

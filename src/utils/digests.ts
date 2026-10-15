@@ -29,7 +29,6 @@ export interface DailyDigestRecord {
   totalForks: number;
   repos: DailyRepoRecord[];
   ai?: {
-    provider?: string;
     model: string;
     headline: string;
     briefing: string[];
