@@ -49,12 +49,12 @@ describe("statsCache", () => {
   });
 
   it("returns null for corrupted JSON", () => {
-    localStorage.setItem("gh-dash.cache.stats", "not-json{{{");
+    localStorage.setItem("gitdeck.cache.stats", "not-json{{{");
     expect(readStatsCache()).toBeNull();
   });
 
   it("returns null if data shape is invalid", () => {
-    localStorage.setItem("gh-dash.cache.stats", JSON.stringify({ repos: "not-array" }));
+    localStorage.setItem("gitdeck.cache.stats", JSON.stringify({ repos: "not-array" }));
     expect(readStatsCache()).toBeNull();
   });
 
@@ -101,7 +101,7 @@ describe("statsCache", () => {
   });
 
   it("returns null if required arrays are missing", () => {
-    localStorage.setItem("gh-dash.cache.stats", JSON.stringify({
+    localStorage.setItem("gitdeck.cache.stats", JSON.stringify({
       repos: [{ name: "ok" }],
       owners: ["owner"],
       fetchedAt: "2026-01-01",

@@ -69,13 +69,13 @@ describe("filtersCache", () => {
 
   it("hydrates legacy caches with inclusive author filters", () => {
     writeFiltersCache(makeDefaultRepoFilters(), makeDefaultIssueFilters(), makeDefaultPrFilters());
-    const raw = JSON.parse(localStorage.getItem("gh-dash.cache.filters")!);
+    const raw = JSON.parse(localStorage.getItem("gitdeck.cache.filters")!);
     raw.issueFilters.authors = ["alice"];
     delete raw.issueFilters.excludedAuthors;
     delete raw.issueFilters.authorMode;
     delete raw.prFilters.excludedAuthors;
     delete raw.prFilters.authorMode;
-    localStorage.setItem("gh-dash.cache.filters", JSON.stringify(raw));
+    localStorage.setItem("gitdeck.cache.filters", JSON.stringify(raw));
 
     const hydrated = hydrateFilters(readFiltersCache()!);
     expect(hydrated.issueFilters.authorMode).toBe("include");
@@ -86,11 +86,11 @@ describe("filtersCache", () => {
 
   it("migrates legacy excluded authors into the separate exclusion set", () => {
     writeFiltersCache(makeDefaultRepoFilters(), makeDefaultIssueFilters(), makeDefaultPrFilters());
-    const raw = JSON.parse(localStorage.getItem("gh-dash.cache.filters")!);
+    const raw = JSON.parse(localStorage.getItem("gitdeck.cache.filters")!);
     raw.issueFilters.authors = ["renovate"];
     raw.issueFilters.authorMode = "exclude";
     delete raw.issueFilters.excludedAuthors;
-    localStorage.setItem("gh-dash.cache.filters", JSON.stringify(raw));
+    localStorage.setItem("gitdeck.cache.filters", JSON.stringify(raw));
 
     const hydrated = hydrateFilters(readFiltersCache()!);
     expect(hydrated.issueFilters.authors.size).toBe(0);
@@ -110,11 +110,11 @@ describe("filtersCache", () => {
 
   it("hydrates caches written before the board filter existed", () => {
     writeFiltersCache(makeDefaultRepoFilters(), makeDefaultIssueFilters(), makeDefaultPrFilters());
-    const raw = JSON.parse(localStorage.getItem("gh-dash.cache.filters")!);
+    const raw = JSON.parse(localStorage.getItem("gitdeck.cache.filters")!);
     delete raw.issueFilters.boards;
     delete raw.issueFilters.excludedBoards;
     delete raw.issueFilters.boardMode;
-    localStorage.setItem("gh-dash.cache.filters", JSON.stringify(raw));
+    localStorage.setItem("gitdeck.cache.filters", JSON.stringify(raw));
 
     const hydrated = hydrateFilters(readFiltersCache()!);
 
@@ -125,29 +125,29 @@ describe("filtersCache", () => {
 
   it("returns null when the board mode is unknown", () => {
     writeFiltersCache(makeDefaultRepoFilters(), makeDefaultIssueFilters(), makeDefaultPrFilters());
-    const raw = JSON.parse(localStorage.getItem("gh-dash.cache.filters")!);
+    const raw = JSON.parse(localStorage.getItem("gitdeck.cache.filters")!);
     raw.issueFilters.boardMode = "only";
-    localStorage.setItem("gh-dash.cache.filters", JSON.stringify(raw));
+    localStorage.setItem("gitdeck.cache.filters", JSON.stringify(raw));
 
     expect(readFiltersCache()).toBeNull();
   });
 
   it("returns null when boards is not a string array", () => {
     writeFiltersCache(makeDefaultRepoFilters(), makeDefaultIssueFilters(), makeDefaultPrFilters());
-    const raw = JSON.parse(localStorage.getItem("gh-dash.cache.filters")!);
+    const raw = JSON.parse(localStorage.getItem("gitdeck.cache.filters")!);
     raw.issueFilters.boards = "PVT_roadmap";
-    localStorage.setItem("gh-dash.cache.filters", JSON.stringify(raw));
+    localStorage.setItem("gitdeck.cache.filters", JSON.stringify(raw));
 
     expect(readFiltersCache()).toBeNull();
   });
 
   it("returns null for corrupted JSON", () => {
-    localStorage.setItem("gh-dash.cache.filters", "not-json{{{");
+    localStorage.setItem("gitdeck.cache.filters", "not-json{{{");
     expect(readFiltersCache()).toBeNull();
   });
 
   it("returns null for invalid shape (missing repoFilters)", () => {
-    localStorage.setItem("gh-dash.cache.filters", JSON.stringify({
+    localStorage.setItem("gitdeck.cache.filters", JSON.stringify({
       issueFilters: { search: "", orgs: [], repos: [], labels: [], authors: [], assignees: [], dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" },
       prFilters: { search: "", orgs: [], repos: [], labels: [], authors: [], assignees: [], dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" },
       savedAt: 1,
@@ -156,7 +156,7 @@ describe("filtersCache", () => {
   });
 
   it("returns null for partial corruption (orgs is not an array)", () => {
-    localStorage.setItem("gh-dash.cache.filters", JSON.stringify({
+    localStorage.setItem("gitdeck.cache.filters", JSON.stringify({
       repoFilters: { search: "", orgs: "not-array", languages: [], visibility: "all", includeForks: true, includeArchived: false },
       issueFilters: { search: "", orgs: [], repos: [], labels: [], authors: [], assignees: [], dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" },
       prFilters: { search: "", orgs: [], repos: [], labels: [], authors: [], assignees: [], dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" },
@@ -166,7 +166,7 @@ describe("filtersCache", () => {
   });
 
   it("returns null when dates field has wrong shape", () => {
-    localStorage.setItem("gh-dash.cache.filters", JSON.stringify({
+    localStorage.setItem("gitdeck.cache.filters", JSON.stringify({
       repoFilters: { search: "", orgs: [], languages: [], visibility: "all", includeForks: true, includeArchived: false },
       issueFilters: { search: "", orgs: [], repos: [], labels: [], authors: [], assignees: [], dates: "bad", preset: "" },
       prFilters: { search: "", orgs: [], repos: [], labels: [], authors: [], assignees: [], dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" },
@@ -191,7 +191,7 @@ describe("filtersCache", () => {
   });
 
   it("sanitizes invalid visibility to 'all' during hydration", () => {
-    localStorage.setItem("gh-dash.cache.filters", JSON.stringify({
+    localStorage.setItem("gitdeck.cache.filters", JSON.stringify({
       repoFilters: { search: "", orgs: [], languages: [], visibility: "bogus", includeForks: true, includeArchived: false },
       issueFilters: { search: "", orgs: [], repos: [], labels: [], authors: [], assignees: [], dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" },
       prFilters: { search: "", orgs: [], repos: [], labels: [], authors: [], assignees: [], dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" },
@@ -204,7 +204,7 @@ describe("filtersCache", () => {
   });
 
   it("stale org references do not crash hydration", () => {
-    localStorage.setItem("gh-dash.cache.filters", JSON.stringify({
+    localStorage.setItem("gitdeck.cache.filters", JSON.stringify({
       repoFilters: { search: "", orgs: ["org-that-no-longer-exists", "still-valid"], languages: ["Haskell"], visibility: "all", includeForks: true, includeArchived: false },
       issueFilters: { search: "", orgs: ["ghost-org"], repos: ["ghost/repo"], labels: [], authors: [], assignees: [], dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" },
       prFilters: { search: "", orgs: [], repos: [], labels: [], authors: [], assignees: [], dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" },
@@ -242,7 +242,7 @@ describe("filtersCache", () => {
   });
 
   it("returns null when includeForks is not a boolean", () => {
-    localStorage.setItem("gh-dash.cache.filters", JSON.stringify({
+    localStorage.setItem("gitdeck.cache.filters", JSON.stringify({
       repoFilters: { search: "", orgs: [], languages: [], visibility: "all", includeForks: "yes", includeArchived: false },
       issueFilters: { search: "", orgs: [], repos: [], labels: [], authors: [], assignees: [], dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" },
       prFilters: { search: "", orgs: [], repos: [], labels: [], authors: [], assignees: [], dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" },

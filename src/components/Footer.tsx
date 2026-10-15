@@ -18,7 +18,7 @@ export function Footer({ onContributorsClick, onChangelogClick }: FooterProps) {
           <span className="app-footer-version">v{APP_VERSION}</span>
         </span>
         <div className="app-footer-links">
-          <a className="app-footer-link" href="https://github.com/debba/gh-dashboard" target="_blank" rel="noreferrer" aria-label="GitHub">
+          <a className="app-footer-link" href="https://github.com/debba/gitdeck" target="_blank" rel="noreferrer" aria-label="GitHub">
             <GithubIcon />
             <span>GitHub</span>
           </a>

@@ -21,7 +21,7 @@ import { useI18n } from "../../i18n/I18nProvider";
 
 type Density = "compact" | "cozy" | "comfortable";
 
-const DENSITY_KEY = "gh-dash.inboxDensity";
+const DENSITY_KEY = "gitdeck.inboxDensity";
 const DENSITY_OPTIONS: Density[] = ["compact", "cozy", "comfortable"];
 
 function readStoredDensity(): Density {

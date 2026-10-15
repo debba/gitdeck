@@ -5,7 +5,7 @@
 
 import type { IssueFilters, PullRequestFilters, RepoFilters } from "./dashboard";
 
-const STORAGE_KEY = "gh-dash.cache.filters";
+const STORAGE_KEY = "gitdeck.cache.filters";
 
 /** JSON-safe representation (Sets become arrays). */
 export interface CachedFilters {
