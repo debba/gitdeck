@@ -1,3 +1,4 @@
+import { projectsAccessHint } from "../../utils/projectsError";
 import { gql } from "../githubClient";
 import { CLEAR_FIELD_MUTATION, MOVE_MUTATION, PROJECT_QUERY, PROJECTS_LIST_QUERY } from "../graphql/projectQueries";
 import { parseJsonBody, sendJson } from "../http";
@@ -54,16 +55,8 @@ interface ProjectResponse {
 /** Projects v2 errors caused by a missing token scope are reported as 200 + `needsScope`. */
 function sendProjectsError(ctx: RouteContext, error: unknown): void {
   const msg = (error as Error).message || String(error);
-  if (/scope|permission|not been granted/i.test(msg)) {
-    return sendJson(ctx.res, 200, {
-      ok: false,
-      needsScope: true,
-      error:
-        "Your gh token lacks Projects v2 permissions.\n" +
-        "Run in your terminal: gh auth refresh -h github.com -s project\n" +
-        "(or 'read:project' if you only need to view).",
-    });
-  }
+  const hint = projectsAccessHint(msg);
+  if (hint) return sendJson(ctx.res, 200, { ok: false, needsScope: true, error: hint });
   sendJson(ctx.res, 500, { ok: false, needsScope: false, error: msg });
 }
 
