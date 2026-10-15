@@ -1,3 +1,24 @@
+## [1.0.9](https://github.com/debba/gitdeck/compare/v1.0.8...v1.0.9) (2026-10-15)
+
+### Features
+
+* Add include and exclude Board filters to Issues, with stable project IDs and persisted selections.
+* Align the logo and browser favicons with the upcoming iOS app.
+
+### Bug Fixes
+
+* Fix optional label-color types and custom CSS variable types so TypeScript checks pass.
+* Correct the security-alert summary sent for a single repository's AI digest.
+* Improve Board token-permission guidance and stop the loading indicator after failures.
+* Preserve saved Board filters when GitHub returns transient or unrelated errors.
+* Reduce pull-request page sizes when GitHub returns gateway timeouts.
+* Keep the footer at the bottom of short pages and display full repository card titles.
+* Complete Gitdeck branding and migrate existing browser preferences and caches.
+
+### Build
+
+* Publish versioned Docker images for v-prefixed release tags.
+
 ## [1.0.8](https://github.com/debba/gitdeck/compare/v1.0.7...v1.0.8) (2026-09-03)
 
 

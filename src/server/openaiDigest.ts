@@ -24,7 +24,7 @@ function buildDigestPrompt(record: DailyDigestRecord | DailyRepoDigest): string 
       `Forks: ${record.forks} (delta ${record.forksDelta >= 0 ? "+" : ""}${record.forksDelta})`,
       `Open issues: ${record.issueCount} (delta ${record.issueDelta >= 0 ? "+" : ""}${record.issueDelta})`,
       `Stale issues: ${record.staleIssueCount} (delta ${record.staleIssueDelta >= 0 ? "+" : ""}${record.staleIssueDelta})`,
-      `Security alerts: ${record.securityAlertsCount} across ${record.securityReposCount} repos`,
+      `Security alerts: ${record.securityAlertsCount}`,
       "Highlights:",
       ...record.highlights,
       "Momentum:",

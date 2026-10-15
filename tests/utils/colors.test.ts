@@ -43,6 +43,7 @@ describe("color utilities", () => {
   });
 
   it("returns undefined for invalid hex inputs", () => {
+    expect(getLabelCssVars(undefined)).toBeUndefined();
     expect(getLabelCssVars("")).toBeUndefined();
     expect(getLabelCssVars("abc")).toBeUndefined();
     expect(getLabelCssVars("zzzzzz")).toBeUndefined();
