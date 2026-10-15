@@ -11,7 +11,7 @@ function makeDefaultRepoFilters() {
 }
 
 function makeDefaultIssueFilters() {
-  return { search: "", orgs: new Set<string>(), repos: new Set<string>(), labels: new Set<string>(), authors: new Set<string>(), excludedAuthors: new Set<string>(), authorMode: "include" as const, assignees: new Set<string>(), dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" };
+  return { search: "", orgs: new Set<string>(), repos: new Set<string>(), boards: new Set<string>(), excludedBoards: new Set<string>(), boardMode: "include" as const, labels: new Set<string>(), authors: new Set<string>(), excludedAuthors: new Set<string>(), authorMode: "include" as const, assignees: new Set<string>(), dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "" };
 }
 
 function makeDefaultPrFilters() {
@@ -95,6 +95,50 @@ describe("filtersCache", () => {
     const hydrated = hydrateFilters(readFiltersCache()!);
     expect(hydrated.issueFilters.authors.size).toBe(0);
     expect([...hydrated.issueFilters.excludedAuthors]).toEqual(["renovate"]);
+  });
+
+  it("round-trips selected issue boards", () => {
+    const issue = { ...makeDefaultIssueFilters(), boards: new Set(["PVT_roadmap"]), excludedBoards: new Set(["PVT_triage"]), boardMode: "exclude" as const };
+    writeFiltersCache(makeDefaultRepoFilters(), issue, makeDefaultPrFilters());
+
+    const hydrated = hydrateFilters(readFiltersCache()!);
+
+    expect([...hydrated.issueFilters.boards]).toEqual(["PVT_roadmap"]);
+    expect([...hydrated.issueFilters.excludedBoards]).toEqual(["PVT_triage"]);
+    expect(hydrated.issueFilters.boardMode).toBe("exclude");
+  });
+
+  it("hydrates caches written before the board filter existed", () => {
+    writeFiltersCache(makeDefaultRepoFilters(), makeDefaultIssueFilters(), makeDefaultPrFilters());
+    const raw = JSON.parse(localStorage.getItem("gh-dash.cache.filters")!);
+    delete raw.issueFilters.boards;
+    delete raw.issueFilters.excludedBoards;
+    delete raw.issueFilters.boardMode;
+    localStorage.setItem("gh-dash.cache.filters", JSON.stringify(raw));
+
+    const hydrated = hydrateFilters(readFiltersCache()!);
+
+    expect(hydrated.issueFilters.boards.size).toBe(0);
+    expect(hydrated.issueFilters.excludedBoards.size).toBe(0);
+    expect(hydrated.issueFilters.boardMode).toBe("include");
+  });
+
+  it("returns null when the board mode is unknown", () => {
+    writeFiltersCache(makeDefaultRepoFilters(), makeDefaultIssueFilters(), makeDefaultPrFilters());
+    const raw = JSON.parse(localStorage.getItem("gh-dash.cache.filters")!);
+    raw.issueFilters.boardMode = "only";
+    localStorage.setItem("gh-dash.cache.filters", JSON.stringify(raw));
+
+    expect(readFiltersCache()).toBeNull();
+  });
+
+  it("returns null when boards is not a string array", () => {
+    writeFiltersCache(makeDefaultRepoFilters(), makeDefaultIssueFilters(), makeDefaultPrFilters());
+    const raw = JSON.parse(localStorage.getItem("gh-dash.cache.filters")!);
+    raw.issueFilters.boards = "PVT_roadmap";
+    localStorage.setItem("gh-dash.cache.filters", JSON.stringify(raw));
+
+    expect(readFiltersCache()).toBeNull();
   });
 
   it("returns null for corrupted JSON", () => {

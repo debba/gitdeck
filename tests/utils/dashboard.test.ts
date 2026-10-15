@@ -137,6 +137,9 @@ const pullRequests: GhPullRequest[] = [
   },
 ];
 
+const roadmapBoard = { id: "PVT_roadmap", name: "acme/Roadmap", number: 1 };
+const triageBoard = { id: "PVT_triage", name: "acme/Triage", number: 2 };
+
 describe("dashboard utilities", () => {
   it("builds issue facets from shared issue types", () => {
     const facets = buildIssueFacets(issues);
@@ -151,6 +154,9 @@ describe("dashboard utilities", () => {
       search: "contrast",
       orgs: new Set(["acme"]),
       repos: new Set(["acme/app"]),
+      boards: new Set(),
+      excludedBoards: new Set(),
+      boardMode: "include",
       labels: new Set(["bug"]),
       authors: new Set(),
       excludedAuthors: new Set(),
@@ -168,6 +174,9 @@ describe("dashboard utilities", () => {
       search: "",
       orgs: new Set(),
       repos: new Set(),
+      boards: new Set(),
+      excludedBoards: new Set(),
+      boardMode: "include",
       labels: new Set(),
       authors: new Set(),
       excludedAuthors: new Set(["alice"]),
@@ -185,6 +194,9 @@ describe("dashboard utilities", () => {
       search: "",
       orgs: new Set(),
       repos: new Set(),
+      boards: new Set(),
+      excludedBoards: new Set(),
+      boardMode: "include",
       labels: new Set(),
       authors: new Set(["alice", "bob"]),
       excludedAuthors: new Set(["bob"]),
@@ -195,6 +207,138 @@ describe("dashboard utilities", () => {
     }, "alice");
 
     expect(result.map((issue) => issue.number)).toEqual([1]);
+  });
+
+  it("counts issues per board", () => {
+    const facets = buildIssueFacets([
+      { ...issues[0], boards: [roadmapBoard, triageBoard] },
+      { ...issues[1], boards: [roadmapBoard] },
+    ]);
+
+    expect([...facets.boards.entries()]).toEqual([["PVT_roadmap", { count: 2, label: "acme/Roadmap", number: 1 }], ["PVT_triage", { count: 1, label: "acme/Triage", number: 2 }]]);
+  });
+
+  it("separates matching board names and distinguishes their labels", () => {
+    const otherRoadmap = { ...roadmapBoard, id: "PVT_other", number: 3 };
+    const items = [{ ...issues[0], boards: [roadmapBoard] }, { ...issues[1], boards: [otherRoadmap] }];
+    const facets = buildIssueFacets(items);
+    expect([...facets.boards.values()].map((value) => value.label)).toEqual(["acme/Roadmap (#1)", "acme/Roadmap (#3)"]);
+    const filters = {
+      search: "", orgs: new Set<string>(), repos: new Set<string>(), boards: new Set([roadmapBoard.id]), excludedBoards: new Set<string>(), boardMode: "include" as const,
+      labels: new Set<string>(), authors: new Set<string>(), excludedAuthors: new Set<string>(), authorMode: "include" as const,
+      assignees: new Set<string>(), dates: { cf: "", ct: "", uf: "", ut: "" }, preset: "",
+    };
+    expect(filterIssues(items, filters, "alice").map((item) => item.number)).toEqual([1]);
+    expect(filterIssues([{ ...items[0], boards: [{ ...roadmapBoard, name: "acme/Renamed" }] }], filters, "alice")).toHaveLength(1);
+  });
+
+  it("filters issues by selected boards", () => {
+    const result = filterIssues([
+      { ...issues[0], boards: [roadmapBoard] },
+      { ...issues[1], boards: [] },
+    ], {
+      search: "",
+      orgs: new Set(),
+      repos: new Set(),
+      boards: new Set(["PVT_roadmap"]),
+      excludedBoards: new Set(),
+      boardMode: "include",
+      labels: new Set(),
+      authors: new Set(),
+      excludedAuthors: new Set(),
+      authorMode: "include",
+      assignees: new Set(),
+      dates: { cf: "", ct: "", uf: "", ut: "" },
+      preset: "",
+    }, "alice");
+
+    expect(result.map((issue) => issue.number)).toEqual([1]);
+  });
+
+  it("excludes issues on excluded boards", () => {
+    const result = filterIssues([
+      { ...issues[0], boards: [roadmapBoard] },
+      { ...issues[1], boards: [] },
+    ], {
+      search: "",
+      orgs: new Set(),
+      repos: new Set(),
+      boards: new Set(),
+      excludedBoards: new Set(["PVT_roadmap"]),
+      boardMode: "exclude",
+      labels: new Set(),
+      authors: new Set(),
+      excludedAuthors: new Set(),
+      authorMode: "include",
+      assignees: new Set(),
+      dates: { cf: "", ct: "", uf: "", ut: "" },
+      preset: "",
+    }, "alice");
+
+    expect(result.map((issue) => issue.number)).toEqual([2]);
+  });
+
+  it("includes and excludes boards at the same time", () => {
+    const result = filterIssues([
+      { ...issues[0], boards: [roadmapBoard] },
+      { ...issues[1], boards: [roadmapBoard, triageBoard] },
+    ], {
+      search: "",
+      orgs: new Set(),
+      repos: new Set(),
+      boards: new Set(["PVT_roadmap"]),
+      excludedBoards: new Set(["PVT_triage"]),
+      boardMode: "exclude",
+      labels: new Set(),
+      authors: new Set(),
+      excludedAuthors: new Set(),
+      authorMode: "include",
+      assignees: new Set(),
+      dates: { cf: "", ct: "", uf: "", ut: "" },
+      preset: "",
+    }, "alice");
+
+    expect(result.map((issue) => issue.number)).toEqual([1]);
+  });
+
+  it("ignores excluded boards when issues carry no board data", () => {
+    const result = filterIssues(issues, {
+      search: "",
+      orgs: new Set(),
+      repos: new Set(),
+      boards: new Set(),
+      excludedBoards: new Set(["PVT_roadmap"]),
+      boardMode: "exclude",
+      labels: new Set(),
+      authors: new Set(),
+      excludedAuthors: new Set(),
+      authorMode: "include",
+      assignees: new Set(),
+      dates: { cf: "", ct: "", uf: "", ut: "" },
+      preset: "",
+    }, "alice");
+
+    expect(result.map((issue) => issue.number)).toEqual([1, 2]);
+  });
+
+  it("ignores selected boards when issues carry no board data", () => {
+    const result = filterIssues(issues, {
+      search: "",
+      orgs: new Set(),
+      repos: new Set(),
+      boards: new Set(["PVT_roadmap"]),
+      excludedBoards: new Set(),
+      boardMode: "include",
+      labels: new Set(),
+      authors: new Set(),
+      excludedAuthors: new Set(),
+      authorMode: "include",
+      assignees: new Set(),
+      dates: { cf: "", ct: "", uf: "", ut: "" },
+      preset: "",
+    }, "alice");
+
+    expect(result.map((issue) => issue.number)).toEqual([1, 2]);
   });
 
   it("filters repositories by visibility and language", () => {

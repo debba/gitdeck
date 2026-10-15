@@ -21,6 +21,9 @@ export interface CachedFilters {
     search: string;
     orgs: string[];
     repos: string[];
+    boards?: string[];
+    excludedBoards?: string[];
+    boardMode?: "include" | "exclude";
     labels: string[];
     authors: string[];
     excludedAuthors?: string[];
@@ -52,6 +55,7 @@ export interface CachedFilters {
 
 const VALID_VISIBILITY = new Set(["all", "public", "private"]);
 const VALID_AUTHOR_MODES = new Set(["include", "exclude"]);
+const VALID_BOARD_MODES = new Set(["include", "exclude"]);
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
@@ -85,6 +89,9 @@ function validateShape(parsed: unknown): parsed is CachedFilters {
   if (typeof issueF.search !== "string") return false;
   if (!isStringArray(issueF.orgs)) return false;
   if (!isStringArray(issueF.repos)) return false;
+  if (issueF.boards !== undefined && !isStringArray(issueF.boards)) return false;
+  if (issueF.excludedBoards !== undefined && !isStringArray(issueF.excludedBoards)) return false;
+  if (issueF.boardMode !== undefined && (typeof issueF.boardMode !== "string" || !VALID_BOARD_MODES.has(issueF.boardMode))) return false;
   if (!isStringArray(issueF.labels)) return false;
   if (!isStringArray(issueF.authors)) return false;
   if (issueF.excludedAuthors !== undefined && !isStringArray(issueF.excludedAuthors)) return false;
@@ -168,6 +175,9 @@ export function hydrateFilters(cached: CachedFilters): {
       search: cached.issueFilters.search,
       orgs: new Set(cached.issueFilters.orgs),
       repos: new Set(cached.issueFilters.repos),
+      boards: new Set(cached.issueFilters.boards ?? []),
+      excludedBoards: new Set(cached.issueFilters.excludedBoards ?? []),
+      boardMode: cached.issueFilters.boardMode ?? "include",
       labels: new Set(cached.issueFilters.labels),
       ...hydrateAuthorSelections(cached.issueFilters),
       authorMode: cached.issueFilters.authorMode ?? "include",
@@ -213,6 +223,9 @@ export function writeFiltersCache(
         search: issueFilters.search,
         orgs: [...issueFilters.orgs],
         repos: [...issueFilters.repos],
+        boards: [...issueFilters.boards],
+        excludedBoards: [...issueFilters.excludedBoards],
+        boardMode: issueFilters.boardMode,
         labels: [...issueFilters.labels],
         authors: [...issueFilters.authors],
         excludedAuthors: [...issueFilters.excludedAuthors],
