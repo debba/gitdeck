@@ -235,7 +235,7 @@ The dashboard can obtain a GitHub token in three different ways. Pick the one th
 
 - **`device` (default)** — OAuth App + Device Flow, as described above. The token is stored under `~/.gitdeck/` and refreshed via the in-app sign-in screen. Requires `GITHUB_CLIENT_ID`.
 - **`gh-cli`** — if you already use the [GitHub CLI](https://cli.github.com/), set `GH_AUTH_MODE=gh-cli` and the server will read the token by running `gh auth token` on each request (cached in-process for 60s). No OAuth App is needed; the scopes are whatever your `gh` session already has. Run `gh auth refresh -h github.com -s repo,read:org,project` if you need extra scopes.
-- **`token`** — bring-your-own personal access token. Set `GH_AUTH_MODE=token` and export `GITHUB_TOKEN=<your-pat>`. Useful for headless / CI-style deployments.
+- **`token`** — bring-your-own personal access token. Set `GH_AUTH_MODE=token` and export `GITHUB_TOKEN=<your-pat>`. Useful for headless / CI-style deployments. Use a classic token with the `repo`, `read:org` and `project` scopes: fine-grained tokens cannot read notifications or user-owned Projects v2, so the Inbox and Board tabs fail with them.
 
 In `gh-cli` and `token` modes the device-flow sign-in screen is hidden; the server treats the configured source as authoritative.
 
