@@ -1,5 +1,7 @@
 import type { CSSProperties } from "react";
 
+export type LabelCssVars = CSSProperties & Record<`--label-${"r" | "g" | "b" | "h" | "s" | "l"}`, string>;
+
 export function getContrastColor(hex: string): "#0a0c12" | "#e7eaf3" {
   if (!hex || hex.length < 6) return "#e7eaf3";
   const red = Number.parseInt(hex.slice(0, 2), 16);
@@ -32,7 +34,7 @@ export function rgbToHsl(r: number, g: number, b: number): [number, number, numb
   return [hue * 60, saturation * 100, lightness * 100];
 }
 
-export function getLabelCssVars(hex: string): CSSProperties | undefined {
+export function getLabelCssVars(hex?: string): LabelCssVars | undefined {
   const cleaned = (hex || "").replace("#", "").trim();
   if (cleaned.length < 6) return undefined;
   const r = Number.parseInt(cleaned.slice(0, 2), 16);
@@ -47,5 +49,5 @@ export function getLabelCssVars(hex: string): CSSProperties | undefined {
     "--label-h": Math.round(h).toString(),
     "--label-s": Math.round(s).toString(),
     "--label-l": Math.round(l).toString(),
-  } as CSSProperties;
+  };
 }
