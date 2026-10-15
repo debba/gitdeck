@@ -1,3 +1,14 @@
+## Unreleased
+
+### Growth Studio
+
+- Added a dedicated `/growth` shell with repository workspaces for Missions, interventions and opportunity scans, editorial plans, month and week calendars, Queue, Library, and weekly Review.
+- Added an additive, idempotent account-scoped SQLite model with one-shot migration of legacy goal suggestions and proposals into first-class interventions and content drafts.
+- Added a media-complete editorial workflow with private uploads, SSRF-guarded source imports, generated SVG cards, browser-only PNG rasterization, clipboard copy, and download fallback.
+- Added manual publication recording, 48-hour and 7-day snapshot attribution, performance summaries, deterministic weekly recommendations, evergreen recycling, and bounded plan re-weighting.
+- Added a colour-coded unified calendar, account-wide filters and ICS export, Growth defaults, and atomic multi-repository planning with pillar-date deconfliction.
+- Publishing remains copy-paste only: Gitdeck stores no social credentials and sends no outbound social posts.
+
 ## [1.0.8](https://github.com/debba/gitdeck/compare/v1.0.7...v1.0.8) (2026-09-03)
 
 

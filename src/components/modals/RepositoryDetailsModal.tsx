@@ -726,7 +726,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, issuesLoade
                   <div className="digest-ai-block">
                     <div className="digest-ai-head">
                       <strong>{repoDigest.ai.headline}</strong>
-                      <span>{repoDigest.ai.model}</span>
+                      <span>{repoDigest.ai.provider ? `${repoDigest.ai.provider} · ${repoDigest.ai.model}` : repoDigest.ai.model}</span>
                     </div>
                     <div className="digest-ai-briefing">
                       {repoDigest.ai.briefing.map((item) => <p key={item}>{item}</p>)}

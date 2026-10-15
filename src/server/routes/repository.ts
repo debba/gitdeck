@@ -1,5 +1,8 @@
 import type { RepoSecuritySummary } from "../../types/github";
+import { normalizeContentSources } from "../../utils/socialProposals";
+import { getActive as getActiveAccount } from "../accountStore";
 import { ghApiJson, gql, restApiPaginate, type RestResult } from "../githubClient";
+import { getRepositoryContentSources, saveRepositoryContentSources } from "../goalStore";
 import { getLatestRepoDigest } from "../digests";
 import {
   BRANCHES_QUERY,
@@ -9,7 +12,7 @@ import {
   REPO_COUNTS_QUERY,
   STARGAZERS_QUERY,
 } from "../graphql/repositoryQueries";
-import { sendJson } from "../http";
+import { parseJsonBody, sendJson } from "../http";
 import type { AppRouter, RouteContext } from "../router";
 import { fetchRepoSecuritySummary } from "../securityAlerts";
 import { requireRepo, requireRepoParts, sendError } from "./shared";
@@ -302,10 +305,27 @@ async function details(ctx: RouteContext): Promise<void> {
   });
 }
 
+async function contentSources(ctx: RouteContext): Promise<void> {
+  const account = await getActiveAccount();
+  if (!account) return sendJson(ctx.res, 401, { ok: false, needsAuth: true, error: "authentication required" });
+  const repository = requireRepo(ctx);
+  if (!repository) return;
+  if (ctx.req.method === "GET") {
+    return sendJson(ctx.res, 200, { ok: true, sources: getRepositoryContentSources(account.id, repository) });
+  }
+  const body = await parseJsonBody<{ sources?: unknown }>(ctx.req, ctx.res);
+  if (!body) return;
+  const sources = normalizeContentSources(body.sources);
+  saveRepositoryContentSources(account.id, repository, sources);
+  sendJson(ctx.res, 200, { ok: true, sources });
+}
+
 export function registerRepositoryRoutes(router: AppRouter): void {
   router.get("/api/stargazers", stargazers);
   router.get("/api/forks", forks);
   router.get("/api/repo-branches", branches);
   router.get("/api/repo-discussions", discussions);
   router.get("/api/repo-details", details);
+  router.get("/api/repository-content-sources", contentSources);
+  router.on("PUT", "/api/repository-content-sources", contentSources);
 }
