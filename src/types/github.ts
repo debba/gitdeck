@@ -11,6 +11,12 @@ export interface GhUser {
   avatar_url?: string;
 }
 
+export interface GhBoard {
+  id: string;
+  name: string;
+  number: number;
+}
+
 export interface GhIssue {
   repository: { name: string; nameWithOwner: string };
   title: string;
@@ -22,6 +28,7 @@ export interface GhIssue {
   labels: GhLabel[];
   commentsCount: number;
   assignees?: GhUser[];
+  boards?: GhBoard[];
 }
 
 export type ReviewDecision = "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;

@@ -20,6 +20,7 @@ export interface InboxSidebarState {
 type IssueLikeFacets = {
   orgs: Map<string, number>;
   repos: Map<string, number>;
+  boards?: Map<string, { count: number; label: string }>;
   labels: Map<string, { count: number; color?: string }>;
   authors: Map<string, number>;
   assignees: Map<string, number>;
@@ -37,6 +38,7 @@ interface SidebarControlsProps {
     orgs: Map<string, number>;
     languages: Map<string, number>;
   };
+  boardFilterAvailable?: boolean;
   onSearchChange: (value: string) => void;
   onIssueFiltersChange: (filters: IssueFilters) => void;
   onPrFiltersChange: (filters: PullRequestFilters) => void;
@@ -58,6 +60,10 @@ function toggleSetValue(values: Set<string>, value: string): Set<string> {
 
 function countOf(value: FacetValue): number {
   return typeof value === "number" ? value : value.count;
+}
+
+function labelOf(name: string, value: FacetValue): string {
+  return typeof value === "number" ? name : value.label ?? name;
 }
 
 function CheckList({
@@ -85,7 +91,7 @@ function CheckList({
       if (a[0] === userLogin && b[0] !== userLogin) return 1;
       if (b[0] === userLogin && a[0] !== userLogin) return -1;
     }
-    return countOf(b[1]) - countOf(a[1]) || a[0].localeCompare(b[0]);
+    return countOf(b[1]) - countOf(a[1]) || labelOf(...a).localeCompare(labelOf(...b));
   });
   if (!sorted.length) return <div style={{ padding: 8, color: "var(--muted-2)", fontSize: 12 }}>{t("common.noMatches")}</div>;
 
@@ -99,7 +105,7 @@ function CheckList({
             {showSwatch && color ? <span className="label-swatch" style={{ background: `#${color}` }} /> : null}
             {languageDot ? <span className="label-swatch" style={{ borderRadius: "50%", background: getLanguageColor(name) }} /> : null}
             {showGhAvatar ? <img src={`https://github.com/${name}.png?size=32`} alt="" loading="lazy" referrerPolicy="no-referrer" style={{ width: 16, height: 16, borderRadius: "50%", flexShrink: 0 }} /> : null}
-            <span className="label-text">{name}</span>
+            <span className="label-text">{labelOf(name, value)}</span>
             <span className="label-count">{countOf(value)}</span>
           </label>
         );
@@ -165,6 +171,7 @@ export function SidebarControls({
   issueFacets,
   prFacets,
   repoFacets,
+  boardFilterAvailable = false,
   onSearchChange,
   onIssueFiltersChange,
   onPrFiltersChange,
@@ -186,6 +193,7 @@ export function SidebarControls({
   const orgSelection = ticketMode ? activeFilters.orgs : repoFilters.orgs;
   const orgEntries = ticketMode ? activeFacets.orgs : repoFacets.orgs;
   const activeAuthorSelection = activeFilters.authorMode === "include" ? activeFilters.authors : activeFilters.excludedAuthors;
+  const activeBoardSelection = issueFilters.boardMode === "include" ? issueFilters.boards : issueFilters.excludedBoards;
   const onActiveFiltersChange = (next: IssueFilters | PullRequestFilters) => {
     if (prMode) onPrFiltersChange(next as PullRequestFilters);
     else onIssueFiltersChange(next as IssueFilters);
@@ -271,6 +279,43 @@ export function SidebarControls({
           <FilterSection title={t("sidebar.repositories")} activeCount={activeFilters.repos.size} dataFor={prMode ? "prs-only" : "issues-only"} onClear={() => onActiveFiltersChange({ ...activeFilters, repos: new Set() })}>
             <CheckList entries={[...activeFacets.repos.entries()]} selected={activeFilters.repos} onToggle={(value) => onActiveFiltersChange({ ...activeFilters, repos: toggleSetValue(activeFilters.repos, value) })} />
           </FilterSection>
+          {issueMode && boardFilterAvailable ? (
+            <FilterSection
+              title={t("sidebar.boards")}
+              activeCount={issueFilters.boards.size + issueFilters.excludedBoards.size}
+              dataFor="issues-only"
+              onClear={() => onIssueFiltersChange({ ...issueFilters, boards: new Set(), excludedBoards: new Set() })}
+            >
+              <div className="opt-group board-mode" role="group" aria-label={t("sidebar.boardFilterMode")}>
+                {(["include", "exclude"] as const).map((mode) => (
+                  <button
+                    type="button"
+                    key={mode}
+                    className={issueFilters.boardMode === mode ? "active" : ""}
+                    onClick={() => onIssueFiltersChange({ ...issueFilters, boardMode: mode })}
+                  >
+                    {t(mode === "include" ? "sidebar.includeBoards" : "sidebar.excludeBoards")}
+                  </button>
+                ))}
+              </div>
+              <CheckList
+                entries={[...(issueFacets.boards ?? new Map<string, { count: number; label: string }>()).entries()]}
+                selected={activeBoardSelection}
+                onToggle={(value) => {
+                  const boards = new Set(issueFilters.boards);
+                  const excludedBoards = new Set(issueFilters.excludedBoards);
+                  const target = issueFilters.boardMode === "include" ? boards : excludedBoards;
+                  const opposite = issueFilters.boardMode === "include" ? excludedBoards : boards;
+                  if (target.has(value)) target.delete(value);
+                  else {
+                    target.add(value);
+                    opposite.delete(value);
+                  }
+                  onIssueFiltersChange({ ...issueFilters, boards, excludedBoards });
+                }}
+              />
+            </FilterSection>
+          ) : null}
           <FilterSection title={t("sidebar.labels")} activeCount={activeFilters.labels.size} dataFor={prMode ? "prs-only" : "issues-only"} onClear={() => onActiveFiltersChange({ ...activeFilters, labels: new Set() })}>
             <CheckList entries={[...activeFacets.labels.entries()]} selected={activeFilters.labels} showSwatch onToggle={(value) => onActiveFiltersChange({ ...activeFilters, labels: toggleSetValue(activeFilters.labels, value) })} />
           </FilterSection>

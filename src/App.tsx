@@ -58,6 +58,7 @@ import {
   type PullRequestFilters,
   type RepoFilters,
 } from "./utils/dashboard";
+import { hasBoards } from "./utils/boards";
 import { clampPage } from "./utils/pagination";
 import { dataRequirementsForTab } from "./utils/dataRequirements";
 import { getOwner } from "./utils/repository";
@@ -118,6 +119,9 @@ const defaultIssueFilters = (): IssueFilters => ({
   search: "",
   orgs: new Set(),
   repos: new Set(),
+  boards: new Set(),
+  excludedBoards: new Set(),
+  boardMode: "include",
   labels: new Set(),
   authors: new Set(),
   excludedAuthors: new Set(),
@@ -517,6 +521,7 @@ export function App() {
     [pullRequestsForFacets, nonArchivedPullRequests],
   );
   const repoFacets = useMemo(() => buildRepoFacets(repos), [repos]);
+  const boardFilterAvailable = useMemo(() => hasBoards(nonArchivedIssues), [nonArchivedIssues]);
   const insightsByRepo = useMemo(() => new Map(repoInsights.map((insight) => [insight.repo, insight])), [repoInsights]);
   const filteredIssues = useMemo(() => sortIssues(filterIssues(nonArchivedIssues, issueFilters, userLogin), issueSort), [nonArchivedIssues, issueFilters, issueSort, userLogin]);
   const filteredPullRequests = useMemo(() => sortPullRequests(filterPullRequests(nonArchivedPullRequests, prFilters, userLogin), prSort), [nonArchivedPullRequests, prFilters, prSort, userLogin]);
@@ -745,6 +750,7 @@ export function App() {
           issueFacets={issueFacets}
           prFacets={prFacets}
           repoFacets={repoFacets}
+          boardFilterAvailable={boardFilterAvailable}
           onSearchChange={setSearch}
           onIssueFiltersChange={(next) => { setIssueFilters(next); setIssuePage(1); }}
           onPrFiltersChange={(next) => { setPrFilters(next); setPrPage(1); }}

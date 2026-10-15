@@ -1,4 +1,5 @@
 import type { GhIssue, GhPullRequest, GhRepo, RepoInsight, ReviewDecision } from "../types/github";
+import { hasBoards } from "./boards";
 import { getOwner } from "./repository";
 
 export interface DateFilters {
@@ -12,6 +13,9 @@ export interface IssueFilters {
   search: string;
   orgs: Set<string>;
   repos: Set<string>;
+  boards: Set<string>;
+  excludedBoards: Set<string>;
+  boardMode: "include" | "exclude";
   labels: Set<string>;
   authors: Set<string>;
   excludedAuthors: Set<string>;
@@ -43,7 +47,7 @@ export interface RepoFilters {
   includeArchived: boolean;
 }
 
-export type FacetValue = number | { count: number; color?: string };
+export type FacetValue = number | { count: number; color?: string; label?: string };
 
 export function issueCountForRepo(issues: GhIssue[], nameWithOwner: string, fallback = 0): number {
   const count = issues.filter((issue) => issue.repository.nameWithOwner === nameWithOwner).length;
@@ -64,6 +68,7 @@ export function buildIssueFacets(issues: GhIssue[]) {
   const facets = {
     orgs: new Map<string, number>(),
     repos: new Map<string, number>(),
+    boards: new Map<string, { count: number; label: string; number: number }>(),
     labels: new Map<string, { count: number; color?: string }>(),
     authors: new Map<string, number>(),
     assignees: new Map<string, number>(),
@@ -73,6 +78,9 @@ export function buildIssueFacets(issues: GhIssue[]) {
     const owner = getOwner(issue.repository.nameWithOwner);
     facets.orgs.set(owner, (facets.orgs.get(owner) || 0) + 1);
     facets.repos.set(issue.repository.nameWithOwner, (facets.repos.get(issue.repository.nameWithOwner) || 0) + 1);
+    for (const board of issue.boards || []) {
+      facets.boards.set(board.id, { count: (facets.boards.get(board.id)?.count || 0) + 1, label: board.name, number: board.number });
+    }
     for (const label of issue.labels || []) {
       facets.labels.set(label.name, { count: (facets.labels.get(label.name)?.count || 0) + 1, color: label.color });
     }
@@ -82,6 +90,11 @@ export function buildIssueFacets(issues: GhIssue[]) {
     }
   }
 
+  const names = new Map<string, number>();
+  for (const board of facets.boards.values()) names.set(board.label, (names.get(board.label) || 0) + 1);
+  for (const board of facets.boards.values()) {
+    if ((names.get(board.label) || 0) > 1) board.label += ` (#${board.number})`;
+  }
   return facets;
 }
 
@@ -142,12 +155,19 @@ export function filterIssues(issues: GhIssue[], filters: IssueFilters, userLogin
   const createdTo = filters.dates.ct ? new Date(`${filters.dates.ct}T23:59:59`).getTime() : null;
   const updatedFrom = filters.dates.uf ? new Date(`${filters.dates.uf}T00:00:00`).getTime() : null;
   const updatedTo = filters.dates.ut ? new Date(`${filters.dates.ut}T23:59:59`).getTime() : null;
+  // The board filter is hidden when no issue carries board data, so a stored selection must not empty the list.
+  const filterByBoard = (filters.boards.size > 0 || filters.excludedBoards.size > 0) && hasBoards(issues);
 
   return issues.filter((issue) => {
     if (archivedRepoNames.has(issue.repository.nameWithOwner)) return false;
     const owner = getOwner(issue.repository.nameWithOwner);
     if (filters.orgs.size && !filters.orgs.has(owner)) return false;
     if (filters.repos.size && !filters.repos.has(issue.repository.nameWithOwner)) return false;
+    if (filterByBoard) {
+      const boards = issue.boards || [];
+      if (filters.boards.size && !boards.some((board) => filters.boards.has(board.id))) return false;
+      if (boards.some((board) => filters.excludedBoards.has(board.id))) return false;
+    }
     if (filters.labels.size && ![...(issue.labels || []).map((label) => label.name)].some((label) => filters.labels.has(label))) return false;
     const author = issue.author?.login || "";
     if (filters.authors.size && !filters.authors.has(author)) return false;

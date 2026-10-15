@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { readUpstreamJson, requireUpstreamJson } from "../upstream";
+import { isProjectsAccessError, openBoards, type ProjectItemRef } from "../../utils/boards";
 import { isGatewayTimeoutStatus, shrinkPageSize } from "../../utils/graphqlPaging";
 import type {
   GhIssue,
@@ -352,10 +353,21 @@ export class GitHubProvider implements Provider {
   async listIssues(account: Account, owners: string[]): Promise<GhIssue[]> {
     if (!owners.length) return [];
     const q = `is:issue is:open ${owners.map((owner) => `user:${owner}`).join(" ")}`.trim();
+    try {
+      return await this.searchIssues(account, q, true);
+    } catch (error) {
+      if (!(error instanceof Error) || !isProjectsAccessError(error.message)) throw error;
+      // A token without Projects access rejects the whole query, so retry without board data.
+      return this.searchIssues(account, q, false);
+    }
+  }
+
+  private async searchIssues(account: Account, q: string, withBoards: boolean): Promise<GhIssue[]> {
+    const query = withBoards ? ISSUE_SEARCH_WITH_BOARDS_QUERY : ISSUE_SEARCH_QUERY;
     const collected: GhIssue[] = [];
     let cursor: string | null = null;
     for (let page = 0; page < 10; page++) {
-      const data: IssueSearchResponse = await this.gqlCall<IssueSearchResponse>(account, ISSUE_SEARCH_QUERY, { q, cursor });
+      const data: IssueSearchResponse = await this.gqlCall<IssueSearchResponse>(account, query, { q, cursor });
       for (const raw of data.search.nodes) {
         if (raw.__typename !== "Issue") continue;
         const node = raw as IssueSearchNode;
@@ -370,6 +382,7 @@ export class GitHubProvider implements Provider {
           labels: node.labels?.nodes ?? [],
           commentsCount: node.comments?.totalCount ?? 0,
           assignees: node.assignees?.nodes ?? [],
+          boards: withBoards ? openBoards(node.projectItems?.nodes) : undefined,
         });
       }
       if (!data.search.pageInfo.hasNextPage) break;
@@ -550,7 +563,12 @@ query($owner: String!, $cursor: String) {
   }
 }`;
 
-const ISSUE_SEARCH_QUERY = `
+const ISSUE_BOARDS_FIELDS = `
+        projectItems(first: 10, includeArchived: false) {
+          nodes { project { id number title closed owner { ... on User { login } ... on Organization { login } } } }
+        }`;
+
+const issueSearchQuery = (extraIssueFields: string) => `
 query($q: String!, $cursor: String) {
   search(query: $q, type: ISSUE, first: 100, after: $cursor) {
     issueCount
@@ -563,12 +581,14 @@ query($q: String!, $cursor: String) {
         repository { name nameWithOwner }
         labels(first: 20) { nodes { name color description } }
         comments { totalCount }
-        assignees(first: 10) { nodes { login url avatarUrl } }
+        assignees(first: 10) { nodes { login url avatarUrl } }${extraIssueFields}
       }
     }
   }
 }`;
 
+const ISSUE_SEARCH_QUERY = issueSearchQuery("");
+const ISSUE_SEARCH_WITH_BOARDS_QUERY = issueSearchQuery(ISSUE_BOARDS_FIELDS);
 const PR_SEARCH_PAGE_SIZE = 25;
 const PR_SEARCH_MIN_PAGE_SIZE = 5;
 const PR_SEARCH_MAX_RESULTS = 1000;
@@ -608,6 +628,7 @@ interface IssueSearchNode {
   labels: { nodes: GhLabel[] };
   comments: { totalCount: number };
   assignees: { nodes: GhUser[] };
+  projectItems?: { nodes: Array<ProjectItemRef | null> } | null;
 }
 
 interface IssueSearchResponse {
