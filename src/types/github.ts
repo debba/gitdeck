@@ -395,6 +395,7 @@ export interface DailyRepoDigest {
   momentum: string[];
   risks: string[];
   ai?: {
+    provider?: string;
     model: string;
     headline: string;
     briefing: string[];
@@ -422,6 +423,7 @@ export interface DailyDigestEntry {
   risks: string[];
   repos: DailyRepoDigest[];
   ai?: {
+    provider?: string;
     model: string;
     headline: string;
     briefing: string[];

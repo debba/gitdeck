@@ -68,3 +68,9 @@ export async function attachHistory(repos: GhRepo[]): Promise<void> {
     if (history?.length) repo.history = history.slice(-HISTORY_RESPONSE_DAYS);
   }
 }
+
+/** Returns the complete retained history without exposing the mutable cache. */
+export async function getRepositorySnapshotHistory(repository: string): Promise<SnapshotEntry[]> {
+  const snapshot = await loadSnapshots();
+  return (snapshot[repository] ?? []).map((entry) => ({ ...entry }));
+}
