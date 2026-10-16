@@ -88,7 +88,7 @@
     min-width: 28px;
   }
   button.count.clearable .count-clear { display: none; }
-  button.count.clearable:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft, var(--panel-3)); }
+  button.count.clearable:hover { color: var(--accent-text); border-color: var(--accent); background: var(--accent-soft, var(--panel-3)); }
   button.count.clearable:hover .count-num { display: none; }
   button.count.clearable:hover .count-clear { display: inline; font-weight: 600; }
   .section-body { padding: 2px 10px 12px; }

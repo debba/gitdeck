@@ -176,7 +176,7 @@
     border: 0;
     border-radius: 6px;
     background: transparent;
-    color: var(--accent);
+    color: var(--accent-text);
     cursor: pointer;
     text-align: left;
     font-size: 12.5px;
@@ -437,7 +437,7 @@
   .btn.primary {
     background: var(--accent);
     border-color: color-mix(in srgb, var(--accent) 78%, white);
-    color: #06120f;
+    color: var(--on-accent);
     box-shadow: 0 8px 20px rgba(0,0,0,0.16);
   }
   .btn.primary:hover { background: color-mix(in srgb, var(--accent) 86%, white); border-color: color-mix(in srgb, var(--accent) 72%, white); }

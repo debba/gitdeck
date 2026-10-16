@@ -23,7 +23,7 @@
     color: var(--text);
     font-weight: 600;
   }
-  .app-footer-credit a:hover { color: var(--accent-2); text-decoration: none; }
+  .app-footer-credit a:hover { color: var(--accent-2-text); text-decoration: none; }
   .app-footer-sep { margin: 0 8px; opacity: 0.6; }
   .app-footer-version {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -98,7 +98,7 @@
     padding: 3px 9px; border-radius: 6px;
   }
   .changelog-version-date { color: var(--muted-2); font-size: 12px; }
-  .changelog-version-link { margin-left: auto; font-size: 12px; color: var(--accent-2); }
+  .changelog-version-link { margin-left: auto; font-size: 12px; color: var(--accent-2-text); }
   .changelog-section { margin-bottom: 16px; }
   .changelog-section h4 {
     margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
@@ -106,6 +106,6 @@
   }
   .changelog-section ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
   .changelog-section li { font-size: 13px; color: var(--text); line-height: 1.5; }
-  .changelog-scope { color: var(--accent); font-weight: 600; }
+  .changelog-scope { color: var(--accent-text); font-weight: 600; }
   .changelog-commit { color: var(--muted-2); font-size: 11px; margin-left: 4px; }
-  .changelog-commit:hover { color: var(--accent-2); text-decoration: none; }
+  .changelog-commit:hover { color: var(--accent-2-text); text-decoration: none; }

@@ -90,7 +90,7 @@
     line-height: 1.2; text-align: center;
   }
   .mailbox-item.empty strong { color: var(--muted-2); font-weight: 600; }
-  .mailbox-item.active strong { background: var(--accent-soft); color: var(--accent); }
+  .mailbox-item.active strong { background: var(--accent-soft); color: var(--accent-text); }
   .mailbox-action {
     flex: 0 0 auto;
     margin: 8px 12px 12px;
@@ -214,7 +214,7 @@
     padding: 2px 8px;
     border-radius: 999px;
     background: var(--accent);
-    color: #ffffff;
+    color: var(--on-accent);
     font-size: 11px;
     letter-spacing: 0;
     text-align: center;
@@ -273,7 +273,7 @@
 
   .inbox-mailbox-list button.active strong {
     background: var(--accent-soft);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .inbox-mailbox-action {
@@ -290,7 +290,7 @@
 
   .inbox-mailbox-action:hover {
     border-color: var(--accent);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   /* ===================== LIST PANE ===================== */
@@ -480,6 +480,14 @@
     display: grid;
     gap: 2px;
     min-width: 0;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: inherit;
   }
 
   .inbox-row-top {
@@ -639,7 +647,7 @@
     padding: 3px 9px;
     border-radius: 999px;
     background: var(--accent);
-    color: #fff;
+    color: var(--on-accent);
     font-size: 10.5px;
     font-weight: 750;
     letter-spacing: 0.06em;
@@ -705,25 +713,25 @@
   .inbox-reason.tone-attention {
     border-color: rgba(59,130,246,0.25);
     background: rgba(59,130,246,0.1);
-    color: #1d4ed8;
+    color: var(--tone-blue);
   }
 
   .inbox-reason.tone-success {
     border-color: rgba(34,197,94,0.28);
     background: rgba(34,197,94,0.1);
-    color: #15803d;
+    color: var(--tone-green);
   }
 
   .inbox-reason.tone-warning {
     border-color: rgba(245,158,11,0.3);
     background: rgba(245,158,11,0.12);
-    color: #b45309;
+    color: var(--tone-amber);
   }
 
   .inbox-reason.tone-danger {
     border-color: rgba(239,68,68,0.32);
     background: rgba(239,68,68,0.1);
-    color: #b91c1c;
+    color: var(--tone-red);
   }
 
   .inbox-context-grid {
@@ -862,13 +870,13 @@
   .inbox-kind.pull-request {
     border-color: rgba(59,130,246,0.28);
     background: rgba(59,130,246,0.1);
-    color: #2563eb;
+    color: var(--tone-blue);
   }
 
   .inbox-kind.issue {
     border-color: rgba(24,185,159,0.28);
     background: rgba(24,185,159,0.1);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .inbox-score {
@@ -882,9 +890,9 @@
     color: var(--muted);
   }
 
-  .inbox-score.tone-attention { background: rgba(59,130,246,0.1); color: #2563eb; }
-  .inbox-score.tone-warning { background: rgba(245,158,11,0.12); color: #b45309; }
-  .inbox-score.tone-danger { background: rgba(239,68,68,0.1); color: #b91c1c; }
+  .inbox-score.tone-attention { background: rgba(59,130,246,0.1); color: var(--tone-blue); }
+  .inbox-score.tone-warning { background: rgba(245,158,11,0.12); color: var(--tone-amber); }
+  .inbox-score.tone-danger { background: rgba(239,68,68,0.1); color: var(--tone-red); }
 
   .inbox-list-empty {
     display: grid;

@@ -63,6 +63,21 @@
   --accent-border: rgba(46, 230, 195, 0.32);
   --accent-shadow: rgba(0, 0, 0, 0.22);
   --selection-bg: rgba(46, 230, 195, 0.28);
+
+  /* Text colors for tinted badges and status text; light themes override them. */
+  --accent-text: var(--color-teal-400);
+  --accent-2-text: var(--color-indigo-400);
+  --on-accent: #06120f;
+  --tone-green: #86efac;
+  --tone-amber: #fde68a;
+  --tone-orange: #fdba74;
+  --tone-red: #fca5a5;
+  --tone-blue: #93c5fd;
+  --tone-indigo: #c7d2fe;
+  --tone-cyan: #67e8f9;
+  --tone-purple: #d8b4fe;
+  --tone-slate: #cbd5e1;
+  --tone-gray: #b6bcc6;
 }
 
 :root[data-theme="light"],
@@ -84,7 +99,7 @@
   --border-soft: #e2e8f0;
   --text: #172033;
   --muted: #59667a;
-  --muted-2: #8793a8;
+  --muted-2: #5b677b;
   --accent: var(--color-teal-600);
   --accent-2: var(--color-indigo-600);
   --ring: 0 0 0 3px rgba(24, 185, 159, 0.18);
@@ -103,6 +118,18 @@
   --accent-border: rgba(24, 185, 159, 0.24);
   --accent-shadow: rgba(17, 24, 39, 0.12);
   --selection-bg: rgba(24, 185, 159, 0.22);
+  --accent-text: #115e59;
+  --accent-2-text: var(--color-indigo-600);
+  --tone-green: #166534;
+  --tone-amber: #854d0e;
+  --tone-orange: #9a3412;
+  --tone-red: #991b1b;
+  --tone-blue: #1d4ed8;
+  --tone-indigo: #4338ca;
+  --tone-cyan: #155e75;
+  --tone-purple: #7e22ce;
+  --tone-slate: #475569;
+  --tone-gray: #4b5563;
 }
 
 @media (prefers-color-scheme: light) {
@@ -120,7 +147,7 @@
     --border-soft: #e2e8f0;
     --text: #172033;
     --muted: #59667a;
-    --muted-2: #8793a8;
+    --muted-2: #5b677b;
     --accent: var(--color-teal-600);
     --accent-2: var(--color-indigo-600);
     --ring: 0 0 0 3px rgba(24, 185, 159, 0.18);
@@ -139,5 +166,17 @@
     --accent-border: rgba(24, 185, 159, 0.24);
     --accent-shadow: rgba(17, 24, 39, 0.12);
     --selection-bg: rgba(24, 185, 159, 0.22);
+    --accent-text: #115e59;
+    --accent-2-text: var(--color-indigo-600);
+    --tone-green: #166534;
+    --tone-amber: #854d0e;
+    --tone-orange: #9a3412;
+    --tone-red: #991b1b;
+    --tone-blue: #1d4ed8;
+    --tone-indigo: #4338ca;
+    --tone-cyan: #155e75;
+    --tone-purple: #7e22ce;
+    --tone-slate: #475569;
+    --tone-gray: #4b5563;
   }
 }
