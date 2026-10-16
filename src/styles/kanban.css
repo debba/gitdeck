@@ -11,7 +11,7 @@
     font-size: 12px; color: var(--muted);
     background: var(--panel); border: 1px solid var(--border); padding: 6px 10px; border-radius: 8px;
   }
-  .kanban-meta a { color: var(--accent-2); }
+  .kanban-meta a { color: var(--accent-2-text); }
   .kanban-info-banner {
     margin: 10px 0 14px; padding: 14px 16px; border-radius: 10px;
     background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3);
@@ -108,15 +108,15 @@
     font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;
     padding: 1px 5px; border-radius: 3px; flex: 0 0 auto;
   }
-  .kcard-type.Issue    { color: #86efac; background: rgba(34,197,94,0.14); border: 1px solid rgba(34,197,94,0.3); }
-  .kcard-type.PullRequest { color: var(--active-start); background: var(--accent-soft); border: 1px solid var(--accent-border); }
+  .kcard-type.Issue    { color: var(--tone-green); background: rgba(34,197,94,0.14); border: 1px solid rgba(34,197,94,0.3); }
+  .kcard-type.PullRequest { color: var(--accent-text); background: var(--accent-soft); border: 1px solid var(--accent-border); }
   .kcard-type.DraftIssue { color: var(--muted); background: var(--panel-3); border: 1px solid var(--border-soft); }
   .kcard-title {
     font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.35;
     word-break: break-word;
   }
   .kcard-title a { color: var(--text); }
-  .kcard-title a:hover { color: var(--accent-2); text-decoration: none; }
+  .kcard-title a:hover { color: var(--accent-2-text); text-decoration: none; }
   .kcard-labels { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 3px; }
   .kcard-meta {
     margin-top: 8px; display: flex; align-items: center; gap: 6px;
@@ -131,13 +131,13 @@
   .ktoast {
     position: fixed; bottom: 20px; right: 20px; z-index: 1000;
     background: var(--panel); border: 1px solid var(--danger);
-    color: #fecaca; padding: 10px 14px; border-radius: 8px;
+    color: var(--tone-red); padding: 10px 14px; border-radius: 8px;
     font-size: 13px; max-width: 360px;
     box-shadow: 0 8px 24px rgba(0,0,0,0.3);
     animation: toastIn .2s ease-out;
   }
   @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } }
-  .ktoast.ok { border-color: var(--success); color: #bbf7d0; }
+  .ktoast.ok { border-color: var(--success); color: var(--tone-green); }
 
   /* Board focus (distraction-free) mode */
   body.board-focus .topbar,

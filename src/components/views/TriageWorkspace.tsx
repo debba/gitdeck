@@ -373,7 +373,9 @@ export function TriageWorkspace({
       if (event.key === "k") { event.preventDefault(); moveSelection(-1); return; }
       if (event.key === "x" && selectedItem) { event.preventDefault(); toggleCheck(selectedItem.id); return; }
       if (event.key === "e") { event.preventDefault(); markActive(); return; }
-      if (event.key === "Enter" && selectedItem) {
+      // Enter opens the selected item, except on other controls, which keep their own activation.
+      const control = target?.closest("button, a, input, summary");
+      if (event.key === "Enter" && selectedItem && (!control || control.matches(".inbox-row-body[aria-current]"))) {
         event.preventDefault();
         if (selectedItem.unread && selectedItem.notificationThreadId && onMarkRead) {
           onMarkRead(selectedItem.notificationThreadId);
@@ -467,14 +469,6 @@ export function TriageWorkspace({
                   else rowRefs.current.delete(item.id);
                 }}
                 onClick={() => setSelectedId(item.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    setSelectedId(item.id);
-                  }
-                }}
               >
                 <label
                   className="inbox-row-check"
@@ -483,6 +477,7 @@ export function TriageWorkspace({
                   <input
                     type="checkbox"
                     checked={isChecked}
+                    aria-label={t("triage.selectItem", { title: item.title })}
                     onChange={() => toggleCheck(item.id)}
                   />
                 </label>
@@ -490,25 +485,25 @@ export function TriageWorkspace({
                   {item.unread ? <span className="inbox-row-dot" /> : null}
                 </span>
                 <Avatar login={item.author?.login} avatarUrl={item.author?.avatarUrl} size={density === "compact" ? 28 : 36} />
-                <div className="inbox-row-body">
-                  <div className="inbox-row-top">
+                <button type="button" className="inbox-row-body" aria-current={isSelected || undefined}>
+                  <span className="inbox-row-top">
                     <strong className="inbox-row-author">{item.author?.login || t("triage.unknown")}</strong>
                     <span className="inbox-row-repo">{item.repository.nameWithOwner}</span>
                     <span className="inbox-row-num">#{item.number}</span>
                     <em>{formatRelativeTime(item.updatedAt)}</em>
-                  </div>
-                  <div className="inbox-row-title">{item.title}</div>
+                  </span>
+                  <span className="inbox-row-title">{item.title}</span>
                   {density !== "compact" ? (
-                    <div className="inbox-row-meta">
+                    <span className="inbox-row-meta">
                       <span className={`inbox-kind ${item.kind}`}>
                         {item.kind === "pull-request" ? <PulseIcon /> : <IssueIcon />}
                         {kindLabel(item, t("list.issue"))}
                       </span>
                       <span className="inbox-row-summary">{primaryReason(item)}</span>
                       <span className="inbox-row-comments">{t("list.comments", { count: formatNumber(item.commentsCount) })}</span>
-                    </div>
+                    </span>
                   ) : null}
-                </div>
+                </button>
                 <span className={`inbox-row-priority tone-${scoreTone(item)}`} aria-hidden="true" />
               </div>
             );

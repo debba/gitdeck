@@ -71,6 +71,7 @@ export const de: Partial<Record<keyof typeof en, string>> = {
   "common.authenticatedExternally": "Extern authentifiziert",
   "common.export": "Exportieren",
   "common.sort": "Sortieren",
+  "common.sortDirection": "Sortierrichtung",
   "common.preset": "Voreinstellung",
   "common.all": "Alle",
   "common.clear": "Leeren",

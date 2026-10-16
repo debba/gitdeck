@@ -71,6 +71,7 @@ export const zh: Partial<Record<keyof typeof en, string>> = {
   "common.authenticatedExternally": "外部认证",
   "common.export": "导出",
   "common.sort": "排序",
+  "common.sortDirection": "排序方向",
   "common.preset": "预设",
   "common.all": "全部",
   "common.clear": "清除",

@@ -175,7 +175,7 @@
 }
 
 .auth-provider:hover .auth-provider-chevron {
-  color: var(--accent);
+  color: var(--accent-text);
   transform: translateX(2px);
 }
 
@@ -288,7 +288,7 @@
   padding: 8px 12px;
   border-radius: 9px;
   background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 12.5px;
   word-break: break-all;
   border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
@@ -513,10 +513,6 @@
   font-weight: 800;
   font-size: 14px;
   flex: 0 0 auto;
-}
-
-:root[data-theme="light"] .auth-primary {
-  color: #ffffff;
 }
 
 @media (max-width: 480px) {
