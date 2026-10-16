@@ -71,8 +71,8 @@ export function CIHealthView({ data, reposByName, onRepoClick }: CIHealthViewPro
       <div className="toolbar">
         <span className="count-chip">{t("ci.repositoriesCount", { count: sorted.length })}</span>
         <div className="spacer" />
-        <label>{t("common.sort")}</label>
-        <select className="sort" value={sort} onChange={(event) => setSort(event.target.value as SortKey)}>
+        <label htmlFor="ci-sort">{t("common.sort")}</label>
+        <select id="ci-sort" className="sort" value={sort} onChange={(event) => setSort(event.target.value as SortKey)}>
           <option value="health_asc">{t("sort.mostAtRisk")}</option>
           <option value="health_desc">{t("sort.bestHealth")}</option>
           <option value="failures_desc">{t("sort.mostFailures")}</option>

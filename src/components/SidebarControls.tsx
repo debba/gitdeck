@@ -292,6 +292,7 @@ export function SidebarControls({
                     type="button"
                     key={mode}
                     className={issueFilters.boardMode === mode ? "active" : ""}
+                    aria-pressed={issueFilters.boardMode === mode}
                     onClick={() => onIssueFiltersChange({ ...issueFilters, boardMode: mode })}
                   >
                     {t(mode === "include" ? "sidebar.includeBoards" : "sidebar.excludeBoards")}
@@ -331,6 +332,7 @@ export function SidebarControls({
                   type="button"
                   key={mode}
                   className={activeFilters.authorMode === mode ? "active" : ""}
+                  aria-pressed={activeFilters.authorMode === mode}
                   onClick={() => onActiveFiltersChange({ ...activeFilters, authorMode: mode })}
                 >
                   {t(mode === "include" ? "sidebar.includeAuthors" : "sidebar.excludeAuthors")}
@@ -364,15 +366,15 @@ export function SidebarControls({
             <CheckList entries={[...repoFacets.languages.entries()]} selected={repoFilters.languages} languageDot onToggle={(value) => onRepoFiltersChange({ ...repoFilters, languages: toggleSetValue(repoFilters.languages, value) })} />
           </FilterSection>
           <FilterSection title={t("sidebar.visibility")} activeCount={repoFilters.visibility === "all" ? 0 : 1} dataFor="repos-only" open onClear={() => onRepoFiltersChange({ ...repoFilters, visibility: "all" })}>
-            <div className="opt-group" role="tablist">
+            <div className="opt-group" role="group" aria-label={t("sidebar.visibility")}>
               {(["all", "public", "private"] as const).map((value) => (
-                <button key={value} className={repoFilters.visibility === value ? "active" : ""} onClick={() => onRepoFiltersChange({ ...repoFilters, visibility: value })}>{value === "all" ? t("common.all") : value === "public" ? t("sidebar.public") : t("sidebar.private")}</button>
+                <button type="button" key={value} className={repoFilters.visibility === value ? "active" : ""} aria-pressed={repoFilters.visibility === value} onClick={() => onRepoFiltersChange({ ...repoFilters, visibility: value })}>{value === "all" ? t("common.all") : value === "public" ? t("sidebar.public") : t("sidebar.private")}</button>
               ))}
             </div>
           </FilterSection>
           <FilterSection title={t("sidebar.options")} activeCount={Number(!repoFilters.includeForks) + Number(repoFilters.includeArchived)} dataFor="repos-only" open onClear={() => onRepoFiltersChange({ ...repoFilters, includeForks: true, includeArchived: false })}>
-            <div className="toggle-row">{t("sidebar.includeForks")} <button className={`toggle ${repoFilters.includeForks ? "on" : ""}`} role="switch" aria-checked={repoFilters.includeForks} onClick={() => onRepoFiltersChange({ ...repoFilters, includeForks: !repoFilters.includeForks })} /></div>
-            <div className="toggle-row">{t("sidebar.includeArchived")} <button className={`toggle ${repoFilters.includeArchived ? "on" : ""}`} role="switch" aria-checked={repoFilters.includeArchived} onClick={() => onRepoFiltersChange({ ...repoFilters, includeArchived: !repoFilters.includeArchived })} /></div>
+            <div className="toggle-row">{t("sidebar.includeForks")} <button className={`toggle ${repoFilters.includeForks ? "on" : ""}`} type="button" role="switch" aria-checked={repoFilters.includeForks} aria-label={t("sidebar.includeForks")} onClick={() => onRepoFiltersChange({ ...repoFilters, includeForks: !repoFilters.includeForks })} /></div>
+            <div className="toggle-row">{t("sidebar.includeArchived")} <button className={`toggle ${repoFilters.includeArchived ? "on" : ""}`} type="button" role="switch" aria-checked={repoFilters.includeArchived} aria-label={t("sidebar.includeArchived")} onClick={() => onRepoFiltersChange({ ...repoFilters, includeArchived: !repoFilters.includeArchived })} /></div>
           </FilterSection>
         </>
       )}

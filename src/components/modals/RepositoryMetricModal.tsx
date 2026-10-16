@@ -76,7 +76,7 @@ export function RepositoryMetricModal({ kind, repo, totalCount, onClose }: Repos
           <span className="modal-count"><strong>{displayedTotal === undefined ? t("common.loading") : formatExactNumber(displayedTotal)}</strong> {t("common.total")}</span>
           <div className="spacer" style={{ flex: 1 }} />
           {kind === "forks" ? (
-            <select value={forkField} onChange={(event) => setForkField(event.target.value)}>
+            <select value={forkField} aria-label={t("common.sort")} onChange={(event) => setForkField(event.target.value)}>
               <option value="PUSHED_AT">{t("metric.recentlyPushed")}</option>
               <option value="UPDATED_AT">{t("metric.recentlyUpdated")}</option>
               <option value="CREATED_AT">{t("metric.newest")}</option>
@@ -84,7 +84,7 @@ export function RepositoryMetricModal({ kind, repo, totalCount, onClose }: Repos
               <option value="NAME">{t("common.name")}</option>
             </select>
           ) : null}
-          <select value={direction} onChange={(event) => setDirection(event.target.value as "ASC" | "DESC")}>
+          <select value={direction} aria-label={t("common.sortDirection")} onChange={(event) => setDirection(event.target.value as "ASC" | "DESC")}>
             <option value="DESC">{t("common.descending")}</option>
             <option value="ASC">{t("common.ascending")}</option>
           </select>

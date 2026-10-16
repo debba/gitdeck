@@ -796,8 +796,8 @@ export function App() {
               <div className="toolbar">
                 <span className="count-chip"><strong>{countText(visibleIssues.length, issuesLoaded)}</strong> {t("common.of")} <span>{countText(filteredIssues.length, issuesLoaded)}</span> {t("common.shown")}</span>
                 <div className="spacer" />
-                <label>{t("common.sort")}</label>
-                <select className="sort" value={issueSort} onChange={(event) => setIssueSort(event.target.value)}>
+                <label htmlFor="issue-sort">{t("common.sort")}</label>
+                <select id="issue-sort" className="sort" value={issueSort} onChange={(event) => setIssueSort(event.target.value)}>
                   <option value="updated_desc">{t("sort.recentlyUpdated")}</option>
                   <option value="updated_asc">{t("sort.leastRecentlyUpdated")}</option>
                   <option value="created_desc">{t("sort.newest")}</option>
@@ -825,8 +825,8 @@ export function App() {
               <div className="toolbar">
                 <span className="count-chip"><strong>{countText(visiblePullRequests.length, prsLoaded)}</strong> {t("common.of")} <span>{countText(filteredPullRequests.length, prsLoaded)}</span> {t("common.shown")}</span>
                 <div className="spacer" />
-                <label>{t("common.preset")}</label>
-                <select className="sort" value={prFilters.preset} onChange={(event) => { setPrFilters({ ...prFilters, preset: event.target.value }); setPrPage(1); }}>
+                <label htmlFor="pr-preset">{t("common.preset")}</label>
+                <select id="pr-preset" className="sort" value={prFilters.preset} onChange={(event) => { setPrFilters({ ...prFilters, preset: event.target.value }); setPrPage(1); }}>
                   <option value="">{t("common.all")}</option>
                   <option value="ready">{t("preset.ready")}</option>
                   <option value="draft">{t("preset.draft")}</option>
@@ -837,8 +837,8 @@ export function App() {
                   <option value="authored-me">{t("preset.authoredMe")}</option>
                   <option value="stale">{t("preset.stale")}</option>
                 </select>
-                <label>{t("common.sort")}</label>
-                <select className="sort" value={prSort} onChange={(event) => setPrSort(event.target.value)}>
+                <label htmlFor="pr-sort">{t("common.sort")}</label>
+                <select id="pr-sort" className="sort" value={prSort} onChange={(event) => setPrSort(event.target.value)}>
                   <option value="updated_desc">{t("sort.recentlyUpdated")}</option>
                   <option value="updated_asc">{t("sort.leastRecentlyUpdated")}</option>
                   <option value="created_desc">{t("sort.newest")}</option>
@@ -868,8 +868,8 @@ export function App() {
               <div className="toolbar">
                 <span className="count-chip"><strong>{countText(visibleRepos.length, reposLoaded)}</strong> {t("common.of")} <span>{countText(filteredRepos.length, reposLoaded)}</span> {t("common.shown")}</span>
                 <div className="spacer" />
-                <label>{t("common.sort")}</label>
-                <select className="sort" value={repoSort} onChange={(event) => setRepoSort(event.target.value)}>
+                <label htmlFor="repo-sort">{t("common.sort")}</label>
+                <select id="repo-sort" className="sort" value={repoSort} onChange={(event) => setRepoSort(event.target.value)}>
                   <option value="stars_desc">{t("sort.mostStars")}</option>
                   <option value="stars_asc">{t("sort.fewestStars")}</option>
                   <option value="forks_desc">{t("sort.mostForks")}</option>

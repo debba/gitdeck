@@ -1319,7 +1319,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, issuesLoade
             </div>
             <div className="repo-detail-subtoolbar">
               <label>
-                Sort
+                {t("common.sort")}
                 <select value={forkField} onChange={(event) => setForkField(event.target.value)}>
                   <option value="PUSHED_AT">{t("metric.recentlyPushed")}</option>
                   <option value="UPDATED_AT">{t("metric.recentlyUpdated")}</option>
@@ -1329,7 +1329,7 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, issuesLoade
                 </select>
               </label>
               <label>
-                Direction
+                {t("common.sortDirection")}
                 <select value={forkDirection} onChange={(event) => setForkDirection(event.target.value as "DESC" | "ASC")}>
                   <option value="DESC">{t("common.descending")}</option>
                   <option value="ASC">{t("common.ascending")}</option>

@@ -149,6 +149,7 @@ export function TopBar({
                     className={`toggle ${hideArchivedNoise ? "on" : ""}`}
                     role="switch"
                     aria-checked={hideArchivedNoise}
+                    aria-label={t("preferences.hideArchivedNoise")}
                     type="button"
                     onClick={() => onHideArchivedNoiseChange(!hideArchivedNoise)}
                   />
