@@ -50,6 +50,8 @@ jobs:
       - name: Build and push
         id: docker_build
         uses: docker/build-push-action@v7.1.0
+        env:
+          DOCKER_BUILD_RECORD_RETENTION_DAYS: 1
         with:
           context: .
           file: ./Dockerfile
