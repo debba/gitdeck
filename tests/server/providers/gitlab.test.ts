@@ -97,9 +97,36 @@ describe("GitLabProvider", () => {
       provider.listPullRequests(account, []),
     ]);
 
-    expect(repos[0]).toMatchObject({ nameWithOwner: "team/tools/deck", stargazerCount: 4, isPrivate: true });
+    expect(repos[0]).toMatchObject({ nameWithOwner: "team/tools/deck", stargazerCount: 4, isPrivate: true, isArchived: false });
     expect(issues[0]).toMatchObject({ number: 7, repository: { nameWithOwner: "team/tools/deck" } });
     expect(mergeRequests[0]).toMatchObject({ number: 8, isDraft: true, headRefName: "feature", baseRefName: "main" });
+  });
+
+  it("fetches the full project view so archived GitLab projects are flagged", async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      expect(url).toContain("/projects?");
+      expect(url).toContain("membership=true");
+      expect(url).not.toContain("simple=true");
+      return json([{
+        id: 11,
+        name: "legacy",
+        path_with_namespace: "team/legacy",
+        description: null,
+        web_url: "https://gitlab.com/team/legacy",
+        namespace: { full_path: "team" },
+        star_count: 0,
+        forks_count: 0,
+        last_activity_at: "2026-01-01T00:00:00Z",
+        visibility: "public",
+        archived: true,
+      }]);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const repos = await new GitLabProvider(config).listRepos(account, []);
+
+    expect(repos[0]).toMatchObject({ nameWithOwner: "team/legacy", isArchived: true });
   });
 
   it("maps pending todos to inbox notifications and marks them done", async () => {

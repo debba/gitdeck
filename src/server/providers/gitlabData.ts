@@ -243,7 +243,7 @@ export async function fetchGitLabOwners(account: Account, config: ProviderConfig
 }
 
 export async function fetchGitLabRepos(account: Account, config: ProviderConfig): Promise<GhRepo[]> {
-  const result = await paginate<GitLabProject>(account, config, "/projects?membership=true&simple=true&order_by=last_activity_at", 10);
+  const result = await paginate<GitLabProject>(account, config, "/projects?membership=true&order_by=last_activity_at", 10);
   return result.ok ? result.data.map(normalizeRepo) : [];
 }
 
