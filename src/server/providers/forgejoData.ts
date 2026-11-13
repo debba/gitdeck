@@ -248,9 +248,9 @@ function normalizePullRequest(raw: ForgejoIssueLike): GhPullRequest {
     isDraft: Boolean(raw.pull_request?.draft),
     reviewDecision,
     reviewsCount: 0,
-    additions: 0,
-    deletions: 0,
-    changedFiles: 0,
+    additions: null,
+    deletions: null,
+    changedFiles: null,
     baseRefName: "",
     headRefName: "",
   };
