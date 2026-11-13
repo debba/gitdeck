@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { readUpstreamJson, requireUpstreamJson } from "../upstream";
 import { isProjectsAccessError, openBoards, type ProjectItemRef } from "../../utils/boards";
+import { githubCheckStatusUnavailable, mapGitHubStatusCheckRollup, type GitHubStatusCheckRollup } from "../../utils/githubChecks";
 import { isGatewayTimeoutStatus, shrinkPageSize } from "../../utils/graphqlPaging";
 import type {
   GhIssue,
@@ -252,7 +253,12 @@ export class GitHubProvider implements Provider {
     catch { return { ok: false, status: response.status, error: "invalid JSON" }; }
   }
 
-  private async gqlCall<T>(account: Account, query: string, variables: Record<string, unknown>): Promise<T> {
+  private async gqlCall<T>(
+    account: Account,
+    query: string,
+    variables: Record<string, unknown>,
+    options?: { tolerateErrors?: boolean },
+  ): Promise<T> {
     const url = this.config.graphqlUrl ?? `${this.config.baseUrl}/graphql`;
     const response = await fetch(url, {
       method: "POST",
@@ -264,13 +270,22 @@ export class GitHubProvider implements Provider {
       body: JSON.stringify({ query, variables }),
     });
     if (response.status === 401) throw new GitHubAuthRequiredError();
+    if (response.status === 403 || response.status === 429) {
+      const text = await response.text();
+      throw new GitHubResponseError(response.status, text || `HTTP ${response.status}`);
+    }
     if (isGatewayTimeoutStatus(response.status)) {
       await response.body?.cancel();
       throw new GitHubGatewayTimeoutError(this.config.label, response.status);
     }
     const json = await requireUpstreamJson<{ data?: T; errors?: { message: string }[] } | null>(this.config.label, response);
-    if (json?.errors?.length) throw new Error(json.errors.map((entry) => entry.message).join("; "));
+    if (json?.errors?.length && !json.data) {
+      throw new Error(json.errors.map((entry) => entry.message).join("; "));
+    }
     if (!json?.data) throw new Error("Empty GraphQL response");
+    if (json.errors?.length && !options?.tolerateErrors) {
+      throw new Error(json.errors.map((entry) => entry.message).join("; "));
+    }
     return json.data;
   }
 
@@ -398,17 +413,32 @@ export class GitHubProvider implements Provider {
     const collected: GhPullRequest[] = [];
     let cursor: string | null = null;
     let pageSize = PR_SEARCH_PAGE_SIZE;
+    let includeChecks = true;
     while (collected.length < PR_SEARCH_MAX_RESULTS) {
       let data: PullRequestSearchResponse;
+      const query = includeChecks ? PR_SEARCH_WITH_CHECKS_QUERY : PR_SEARCH_QUERY;
       try {
-        data = await this.gqlCall<PullRequestSearchResponse>(account, PR_SEARCH_QUERY, { q, cursor, pageSize });
+        data = await this.gqlCall<PullRequestSearchResponse>(account, query, { q, cursor, pageSize }, {
+          tolerateErrors: includeChecks,
+        });
       } catch (error) {
+        // A forbidden or rate-limited checks field must not drop the pull request list.
+        if (includeChecks && githubCheckStatusUnavailable(error)) {
+          includeChecks = false;
+          continue;
+        }
         // Diff stats and review decisions are expensive to resolve; a large page can
         // exceed GitHub's GraphQL time budget, so retry the same cursor with fewer items.
         const smaller = error instanceof GitHubGatewayTimeoutError ? shrinkPageSize(pageSize, PR_SEARCH_MIN_PAGE_SIZE) : null;
-        if (smaller === null) throw error;
-        pageSize = smaller;
-        continue;
+        if (smaller !== null) {
+          pageSize = smaller;
+          continue;
+        }
+        if (includeChecks && error instanceof GitHubGatewayTimeoutError) {
+          includeChecks = false;
+          continue;
+        }
+        throw error;
       }
       for (const raw of data.search.nodes) {
         if (raw.__typename !== "PullRequest") continue;
@@ -432,6 +462,7 @@ export class GitHubProvider implements Provider {
           changedFiles: node.changedFiles,
           baseRefName: node.baseRefName,
           headRefName: node.headRefName,
+          headCheck: includeChecks ? mapGitHubStatusCheckRollup(node.statusCheckRollup, node.url) : null,
         });
       }
       if (!data.search.pageInfo.hasNextPage) break;
@@ -537,6 +568,13 @@ export class GitHubAuthRequiredError extends Error {
   }
 }
 
+export class GitHubResponseError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+    this.name = "GitHubResponseError";
+  }
+}
+
 export class GitHubGatewayTimeoutError extends Error {
   constructor(service: string, readonly status: number) {
     super(`${service} returned HTTP ${status} (the GraphQL query likely timed out)`);
@@ -593,7 +631,19 @@ const PR_SEARCH_PAGE_SIZE = 25;
 const PR_SEARCH_MIN_PAGE_SIZE = 5;
 const PR_SEARCH_MAX_RESULTS = 1000;
 
-const PR_SEARCH_QUERY = `
+const PR_CHECK_FIELDS = `
+        statusCheckRollup {
+          state
+          contexts(first: 20) {
+            nodes {
+              __typename
+              ... on CheckRun { status conclusion }
+              ... on StatusContext { state }
+            }
+          }
+        }`;
+
+const pullRequestSearchQuery = (withChecks: boolean) => `
 query($q: String!, $cursor: String, $pageSize: Int!) {
   search(query: $q, type: ISSUE, first: $pageSize, after: $cursor) {
     issueCount
@@ -610,11 +660,14 @@ query($q: String!, $cursor: String, $pageSize: Int!) {
         reviews { totalCount }
         assignees(first: 10) { nodes { login url avatarUrl } }
         additions deletions changedFiles
-        baseRefName headRefName
+        baseRefName headRefName${withChecks ? PR_CHECK_FIELDS : ""}
       }
     }
   }
 }`;
+
+const PR_SEARCH_QUERY = pullRequestSearchQuery(false);
+const PR_SEARCH_WITH_CHECKS_QUERY = pullRequestSearchQuery(true);
 
 interface IssueSearchNode {
   __typename: string;
@@ -658,6 +711,7 @@ interface PullRequestSearchNode {
   changedFiles: number;
   baseRefName: string;
   headRefName: string;
+  statusCheckRollup?: GitHubStatusCheckRollup | null;
 }
 
 interface PullRequestSearchResponse {
