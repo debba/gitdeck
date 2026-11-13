@@ -33,6 +33,22 @@ export interface GhIssue {
 
 export type ReviewDecision = "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
 
+export type PullRequestCheckStatus =
+  | "success"
+  | "failed"
+  | "running"
+  | "pending"
+  | "canceled"
+  | "skipped"
+  | "manual";
+
+/** Latest head CI check or pipeline for a pull request or merge request. */
+export interface PullRequestHeadCheck {
+  status: PullRequestCheckStatus;
+  /** Absolute URL of the pipeline or check. Null when the provider reports a status without a page. */
+  url: string | null;
+}
+
 export interface GhPullRequest {
   repository: { name: string; nameWithOwner: string };
   title: string;
@@ -52,6 +68,8 @@ export interface GhPullRequest {
   changedFiles: number;
   baseRefName: string;
   headRefName: string;
+  /** Present when the provider loaded a head pipeline or check. Omitted by providers that do not supply one. */
+  headCheck?: PullRequestHeadCheck | null;
 }
 
 export interface CIRunSummary {

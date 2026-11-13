@@ -6,6 +6,7 @@ import { formatNumber, formatRelativeTime } from "../../utils/format";
 import { searchInboxItems, type InboxItem } from "../../utils/inbox";
 import { clampPage } from "../../utils/pagination";
 import { Avatar } from "../common/Avatar";
+import { PullRequestCheckBadge } from "../common/PullRequestCheckBadge";
 import { Pagination } from "../common/Pagination";
 import {
   BookIcon,
@@ -195,6 +196,7 @@ function TriagePreview({ item, repo, onRepoClick, onMarkRead }: TriagePreviewPro
                 {t("triage.filesChanged", { additions: formatNumber(item.diff.additions), deletions: formatNumber(item.diff.deletions), files: formatNumber(item.diff.changedFiles) })}
               </span>
             ) : null}
+            {item.headCheck ? <PullRequestCheckBadge check={item.headCheck} /> : null}
           </div>
         </div>
       ) : null}
@@ -220,6 +222,7 @@ function TriageProperties({ item }: { item: InboxItem | undefined }) {
           <PropertyRow label={t("triage.created")}>{new Date(item.createdAt).toLocaleDateString()}</PropertyRow>
           <PropertyRow label={t("triage.updated")}>{new Date(item.updatedAt).toLocaleDateString()}</PropertyRow>
           {item.branch ? <PropertyRow label={t("triage.branch")}>{item.branch.head} {"->"} {item.branch.base}</PropertyRow> : null}
+          {item.headCheck ? <PropertyRow label={t("checks.pipeline")}><PullRequestCheckBadge check={item.headCheck} /></PropertyRow> : null}
           <div className="inbox-property-block">
             <span>{t("triage.labels")}</span>
             <LabelPills item={item} />

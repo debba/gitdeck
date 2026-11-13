@@ -765,6 +765,20 @@
     display: grid; grid-template-columns: 52px minmax(0, 1fr) auto;
     gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border-soft);
   }
+  .repo-detail-issue.repo-detail-pr {
+    display: flex;
+  }
+  .repo-detail-issue.repo-detail-pr > a {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    color: inherit;
+    text-decoration: none;
+  }
+  .repo-detail-issue.repo-detail-pr > a:hover { text-decoration: none; }
   .repo-detail-issue:hover { background: var(--hover-surface); text-decoration: none; }
   .repo-detail-issue span { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); font-size: 12px; }
   .repo-detail-issue strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -775,7 +789,7 @@
     .repo-detail-traffic-grid { grid-template-columns: 1fr; }
     .repo-chart-grid { grid-template-columns: 1fr; }
     .repo-detail-traffic-row { grid-template-columns: 1fr; }
-    .repo-detail-issue, .dependent-row { grid-template-columns: minmax(0, 1fr); }
+    .repo-detail-issue, .dependent-row, .repo-detail-issue.repo-detail-pr > a { grid-template-columns: minmax(0, 1fr); }
     .repo-detail-issue span, .dependent-row img, .dependent-row > span { display: none; }
     .repo-detail-issue em, .dependent-row em { white-space: normal; }
     .repo-detail-subtoolbar { justify-content: flex-start; }

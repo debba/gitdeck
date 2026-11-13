@@ -6,6 +6,11 @@ import type {
   GhRepo,
   GhUser,
 } from "../../types/github";
+import {
+  mapGitLabHeadPipeline,
+  pickGitLabHeadPipeline,
+  type GitLabPipelineRef,
+} from "../../utils/gitlabPipeline";
 import { readUpstreamJson } from "../upstream";
 import type { Account, ProviderConfig } from "./types";
 
@@ -57,13 +62,29 @@ interface GitLabIssue {
 }
 
 interface GitLabMergeRequest extends GitLabIssue {
+  project_id?: number;
   draft?: boolean;
   work_in_progress?: boolean;
   target_branch?: string;
   source_branch?: string;
+  sha?: string | null;
   changes_count?: string | null;
   reviewers?: GitLabUser[];
+  /** Present on the single-merge-request payload. The list endpoint omits it. */
+  head_pipeline?: GitLabPipelineRef | null;
+  pipeline?: GitLabPipelineRef | null;
 }
+
+interface MissingPipeline {
+  pr: GhPullRequest;
+  projectId: number;
+  sha: string | null;
+  ref: string | null;
+  projectPath: string;
+}
+
+const PROJECT_PIPELINE_LIMIT = 40;
+const PROJECT_PIPELINE_CONCURRENCY = 4;
 
 interface GitLabTodo {
   id: number;
@@ -180,7 +201,9 @@ function normalizeIssue(raw: GitLabIssue): GhIssue {
   };
 }
 
-function normalizeMergeRequest(raw: GitLabMergeRequest): GhPullRequest {
+function normalizeMergeRequest(raw: GitLabMergeRequest, webUrl: string): GhPullRequest {
+  const projectPath = projectPathFromItem(raw);
+  const embedded = raw.head_pipeline ?? raw.pipeline ?? null;
   return {
     ...normalizeIssue(raw),
     isDraft: Boolean(raw.draft ?? raw.work_in_progress),
@@ -191,7 +214,63 @@ function normalizeMergeRequest(raw: GitLabMergeRequest): GhPullRequest {
     changedFiles: Number(raw.changes_count) || 0,
     baseRefName: raw.target_branch ?? "",
     headRefName: raw.source_branch ?? "",
+    headCheck: mapGitLabHeadPipeline(embedded, webUrl, projectPath),
   };
+}
+
+/**
+ * The merge request list payload does not include `head_pipeline`. Load recent
+ * project pipelines once per project and match them to each merge request.
+ * A 401 or 429 stops the remaining lookups. A 403 or other per-project failure
+ * leaves that project's merge requests without a badge.
+ */
+async function attachProjectPipelines(
+  account: Account,
+  config: ProviderConfig,
+  pending: MissingPipeline[],
+): Promise<void> {
+  const byProject = new Map<number, MissingPipeline[]>();
+  for (const item of pending) {
+    const group = byProject.get(item.projectId) ?? [];
+    group.push(item);
+    byProject.set(item.projectId, group);
+  }
+  const projectIds = [...byProject.keys()].slice(0, PROJECT_PIPELINE_LIMIT);
+  let cursor = 0;
+  let stop = false;
+
+  async function worker(): Promise<void> {
+    while (!stop) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= projectIds.length) return;
+      const projectId = projectIds[index];
+      let result: RestResult<GitLabPipelineRef[]>;
+      try {
+        result = await rest<GitLabPipelineRef[]>(
+          account,
+          config,
+          `/projects/${encodeURIComponent(String(projectId))}/pipelines?per_page=100&order_by=id&sort=desc`,
+        );
+      } catch {
+        continue;
+      }
+      if (!result.ok) {
+        if (result.status === 401 || result.status === 429) stop = true;
+        continue;
+      }
+      const pipelines = Array.isArray(result.data) ? result.data : [];
+      for (const item of byProject.get(projectId) ?? []) {
+        const match = pickGitLabHeadPipeline(pipelines, item.sha, item.ref);
+        if (!match) continue;
+        item.pr.headCheck = mapGitLabHeadPipeline(match, config.webUrl, item.projectPath);
+      }
+    }
+  }
+
+  const workers = Math.min(PROJECT_PIPELINE_CONCURRENCY, projectIds.length);
+  if (!workers) return;
+  await Promise.all(Array.from({ length: workers }, () => worker()));
 }
 
 function todoReason(action: string | undefined): GhNotificationReason {
@@ -254,7 +333,23 @@ export async function fetchGitLabIssues(account: Account, config: ProviderConfig
 
 export async function fetchGitLabMergeRequests(account: Account, config: ProviderConfig): Promise<GhPullRequest[]> {
   const result = await paginate<GitLabMergeRequest>(account, config, "/merge_requests?scope=all&state=opened&order_by=updated_at", 10);
-  return result.ok ? result.data.map(normalizeMergeRequest) : [];
+  if (!result.ok) return [];
+  const pending: MissingPipeline[] = [];
+  const mergeRequests = result.data.map((raw) => {
+    const mergeRequest = normalizeMergeRequest(raw, config.webUrl);
+    if (!mergeRequest.headCheck && raw.project_id) {
+      pending.push({
+        pr: mergeRequest,
+        projectId: raw.project_id,
+        sha: raw.sha ?? null,
+        ref: raw.source_branch ?? null,
+        projectPath: mergeRequest.repository.nameWithOwner,
+      });
+    }
+    return mergeRequest;
+  });
+  await attachProjectPipelines(account, config, pending);
+  return mergeRequests;
 }
 
 export async function fetchGitLabTodos(account: Account, config: ProviderConfig) {
