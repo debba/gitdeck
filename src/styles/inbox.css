@@ -802,6 +802,13 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 
+  .inbox-pr-detail .pr-badge.ci,
+  .inbox-properties .pr-badge.ci {
+    font-family: inherit;
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
   /* ===================== PROPERTIES ===================== */
 
   .inbox-properties {

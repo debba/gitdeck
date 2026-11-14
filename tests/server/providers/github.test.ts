@@ -49,6 +49,32 @@ function requestsBoards(init?: RequestInit): boolean {
   return String(init?.body).includes("projectItems");
 }
 
+function requestsChecks(init?: RequestInit): boolean {
+  return String(init?.body).includes("statusCheckRollup");
+}
+
+const pullRequestNode = {
+  __typename: "PullRequest",
+  number: 10,
+  title: "Add dark mode tokens",
+  url: "https://github.com/acme/app/pull/10",
+  createdAt: "2026-04-21T10:00:00Z",
+  updatedAt: "2026-04-22T10:00:00Z",
+  isDraft: false,
+  reviewDecision: "APPROVED",
+  author: { login: "alice", url: "https://github.com/alice" },
+  repository: { name: "app", nameWithOwner: "acme/app" },
+  labels: { nodes: [] },
+  comments: { totalCount: 2 },
+  reviews: { totalCount: 1 },
+  assignees: { nodes: [] },
+  additions: 4,
+  deletions: 1,
+  changedFiles: 1,
+  baseRefName: "main",
+  headRefName: "feature",
+};
+
 afterEach(() => vi.unstubAllGlobals());
 
 describe("GitHubProvider.listIssues", () => {
@@ -126,5 +152,43 @@ describe("GitHubProvider.listIssues", () => {
 
     await expect(new GitHubProvider(config).listIssues(account, ["acme"])).rejects.toBeInstanceOf(GitHubAuthRequiredError);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("GitHubProvider.listPullRequests", () => {
+  it("maps the combined status check rollup onto the shared badge", async () => {
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      expect(requestsChecks(init)).toBe(true);
+      return searchResult([{
+        ...pullRequestNode,
+        statusCheckRollup: {
+          state: "PENDING",
+          contexts: { nodes: [{ __typename: "CheckRun", status: "IN_PROGRESS", conclusion: null }] },
+        },
+      }]);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const [pullRequest] = await new GitHubProvider(config).listPullRequests(account, ["acme"]);
+
+    expect(pullRequest.headCheck).toEqual({
+      status: "running",
+      url: "https://github.com/acme/app/pull/10/checks",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([403, 429])("omits check badges when GitHub returns HTTP %s", async (status) => {
+    const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      if (requestsChecks(init)) return json({ message: "nope" }, status);
+      return searchResult([pullRequestNode]);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const [pullRequest] = await new GitHubProvider(config).listPullRequests(account, ["acme"]);
+
+    expect(pullRequest.headCheck).toBeNull();
+    expect(pullRequest.number).toBe(10);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

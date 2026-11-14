@@ -1,4 +1,4 @@
-import type { GhIssue, GhLabel, GhNotification, GhPullRequest, GhUser, ReviewDecision } from "../types/github";
+import type { GhIssue, GhLabel, GhNotification, GhPullRequest, GhUser, PullRequestHeadCheck, ReviewDecision } from "../types/github";
 
 const DAY_MS = 86_400_000;
 
@@ -59,6 +59,7 @@ export interface InboxItem {
   reviewDecision?: ReviewDecision;
   branch?: { head: string; base: string };
   diff?: { additions: number; deletions: number; changedFiles: number };
+  headCheck?: PullRequestHeadCheck | null;
   unread?: boolean;
   notificationThreadId?: string;
   notificationReason?: string;
@@ -222,6 +223,7 @@ function buildPullRequestInboxItem(pr: GhPullRequest, userLogin: string, now: nu
     reviewDecision: pr.reviewDecision,
     branch: { head: pr.headRefName, base: pr.baseRefName },
     diff: { additions: pr.additions, deletions: pr.deletions, changedFiles: pr.changedFiles },
+    headCheck: pr.headCheck ?? null,
   };
 }
 

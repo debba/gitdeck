@@ -4,6 +4,7 @@ import { formatNumber, formatRelativeTime } from "../../utils/format";
 import { getLabelCssVars } from "../../utils/colors";
 import { Avatar } from "../common/Avatar";
 import { PulseIcon } from "../common/Icons";
+import { PullRequestCheckBadge } from "../common/PullRequestCheckBadge";
 import { useI18n } from "../../i18n/I18nProvider";
 
 function reviewBadgeClass(pr: GhPullRequest): string {
@@ -24,20 +25,23 @@ export function PullRequestList({ pullRequests }: { pullRequests: GhPullRequest[
         const stale = Date.now() - new Date(pr.updatedAt).getTime() > 14 * 86_400_000;
         const author = pr.author?.login || "unknown";
         return (
-          <a className="data-row" href={pr.url} key={pr.url} target="_blank" rel="noreferrer">
+          <div className="data-row" key={pr.url}>
             <Avatar login={pr.author?.login} avatarUrl={pr.author?.avatarUrl} size={36} />
             <div className="data-row-body">
-              <div className="data-row-top">
-                <strong className="data-row-author">{author}</strong>
-                <span className="data-row-repo">{pr.repository.nameWithOwner}</span>
-                <span className="data-row-num">#{pr.number}</span>
-                <em>{formatRelativeTime(pr.updatedAt, Date.now(), language)}</em>
-              </div>
-              <div className="data-row-title">{pr.title}</div>
+              <a className="data-row-main" href={pr.url} target="_blank" rel="noreferrer">
+                <div className="data-row-top">
+                  <strong className="data-row-author">{author}</strong>
+                  <span className="data-row-repo">{pr.repository.nameWithOwner}</span>
+                  <span className="data-row-num">#{pr.number}</span>
+                  <em>{formatRelativeTime(pr.updatedAt, Date.now(), language)}</em>
+                </div>
+                <div className="data-row-title">{pr.title}</div>
+              </a>
               <div className="data-row-meta">
                 <span className="data-kind pull-request"><PulseIcon /> {t("list.pr")}</span>
                 {pr.isDraft ? <span className="pr-badge draft">{t("list.draft")}</span> : null}
                 <span className={`pr-badge review ${reviewBadgeClass(pr)}`}>{reviewDecisionLabel(pr.reviewDecision)}</span>
+                {pr.headCheck ? <PullRequestCheckBadge check={pr.headCheck} /> : null}
                 {stale ? <span className="stale-badge">{t("list.stale")}</span> : null}
                 {(pr.labels || []).slice(0, 3).map((label) => {
                   const vars = getLabelCssVars(label.color);
@@ -66,7 +70,7 @@ export function PullRequestList({ pullRequests }: { pullRequests: GhPullRequest[
                 ) : null}
               </div>
             </div>
-          </a>
+          </div>
         );
       })}
     </div>
