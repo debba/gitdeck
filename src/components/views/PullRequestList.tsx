@@ -56,10 +56,12 @@ export function PullRequestList({ pullRequests }: { pullRequests: GhPullRequest[
                   );
                 })}
                 <span className="data-row-spacer" />
-                <span className="pr-diff">
-                  <span className="pr-diff-add">+{formatNumber(pr.additions)}</span>
-                  <span className="pr-diff-del">−{formatNumber(pr.deletions)}</span>
-                </span>
+                {pr.additions != null && pr.deletions != null ? (
+                  <span className="pr-diff">
+                    <span className="pr-diff-add">+{formatNumber(pr.additions)}</span>
+                    <span className="pr-diff-del">−{formatNumber(pr.deletions)}</span>
+                  </span>
+                ) : null}
                 <span className="data-row-count">{t("list.comments", { count: pr.commentsCount })}</span>
                 {pr.assignees && pr.assignees.length ? (
                   <span className="data-row-assignees">

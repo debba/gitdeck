@@ -63,9 +63,10 @@ export interface GhPullRequest {
   isDraft: boolean;
   reviewDecision: ReviewDecision;
   reviewsCount: number;
-  additions: number;
-  deletions: number;
-  changedFiles: number;
+  /** Null when the provider has not loaded line stats. Zero is a real empty diff. */
+  additions: number | null;
+  deletions: number | null;
+  changedFiles: number | null;
   baseRefName: string;
   headRefName: string;
   /** Present when the provider loaded a head pipeline or check. Omitted by providers that do not supply one. */

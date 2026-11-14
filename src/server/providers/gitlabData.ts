@@ -7,6 +7,16 @@ import type {
   GhUser,
 } from "../../types/github";
 import {
+  GITLAB_DIFF_STATS_BATCH_SIZE,
+  GITLAB_DIFF_STATS_LIMIT,
+  buildGitLabDiffStatsQuery,
+  gitLabDiffStatsRateLimited,
+  gitLabGraphqlUrl,
+  parseGitLabChangesCount,
+  readGitLabDiffStats,
+  type GitLabDiffStatsPayload,
+} from "../../utils/gitlabDiffStats";
+import {
   mapGitLabHeadPipeline,
   pickGitLabHeadPipeline,
   type GitLabPipelineRef,
@@ -209,13 +219,57 @@ function normalizeMergeRequest(raw: GitLabMergeRequest, webUrl: string): GhPullR
     isDraft: Boolean(raw.draft ?? raw.work_in_progress),
     reviewDecision: "REVIEW_REQUIRED",
     reviewsCount: raw.reviewers?.length ?? 0,
-    additions: 0,
-    deletions: 0,
-    changedFiles: Number(raw.changes_count) || 0,
+    additions: null,
+    deletions: null,
+    changedFiles: parseGitLabChangesCount(raw.changes_count),
     baseRefName: raw.target_branch ?? "",
     headRefName: raw.source_branch ?? "",
     headCheck: mapGitLabHeadPipeline(embedded, webUrl, projectPath),
   };
+}
+
+/**
+ * The merge request list has no line counts. `diffStatsSummary` is one GraphQL
+ * field per merge request, so lookups are batched instead of calling `/diffs`.
+ * A rate limit, auth failure, or transport error keeps the counts already loaded
+ * and leaves the rest unknown.
+ */
+async function attachDiffStats(
+  account: Account,
+  config: ProviderConfig,
+  mergeRequests: GhPullRequest[],
+): Promise<void> {
+  const targets = mergeRequests
+    .map((mergeRequest, index) => ({ index, projectPath: mergeRequest.repository.nameWithOwner, iid: mergeRequest.number }))
+    .filter((target) => target.projectPath && target.iid > 0)
+    .slice(0, GITLAB_DIFF_STATS_LIMIT);
+
+  for (let offset = 0; offset < targets.length; offset += GITLAB_DIFF_STATS_BATCH_SIZE) {
+    const batch = targets.slice(offset, offset + GITLAB_DIFF_STATS_BATCH_SIZE);
+    let result: RestResult<GitLabDiffStatsPayload>;
+    try {
+      result = await rest<GitLabDiffStatsPayload>(account, config, gitLabGraphqlUrl(config.webUrl), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: buildGitLabDiffStatsQuery(batch) }),
+      });
+    } catch {
+      return;
+    }
+    if (!result.ok) return;
+    const payload = result.data && typeof result.data === "object" && !Array.isArray(result.data) ? result.data : null;
+    const stats = readGitLabDiffStats(payload, batch.length);
+    batch.forEach((target, index) => {
+      const stat = stats[index];
+      if (!stat) return;
+      // Update in place: pipeline lookups hold references to the same objects.
+      const mergeRequest = mergeRequests[target.index];
+      mergeRequest.additions = stat.additions;
+      mergeRequest.deletions = stat.deletions;
+      mergeRequest.changedFiles = stat.changedFiles;
+    });
+    if (!payload || gitLabDiffStatsRateLimited(payload)) return;
+  }
 }
 
 /**
@@ -348,7 +402,10 @@ export async function fetchGitLabMergeRequests(account: Account, config: Provide
     }
     return mergeRequest;
   });
-  await attachProjectPipelines(account, config, pending);
+  await Promise.all([
+    attachDiffStats(account, config, mergeRequests),
+    attachProjectPipelines(account, config, pending),
+  ]);
   return mergeRequests;
 }
 

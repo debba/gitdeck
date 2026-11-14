@@ -267,6 +267,10 @@ export function filterPullRequests(prs: GhPullRequest[], filters: PullRequestFil
   });
 }
 
+function diffSize(pr: GhPullRequest): number {
+  return (pr.additions ?? 0) + (pr.deletions ?? 0);
+}
+
 export function sortPullRequests(prs: GhPullRequest[], sort: string): GhPullRequest[] {
   const sorted = [...prs];
   sorted.sort((a, b) => {
@@ -275,9 +279,9 @@ export function sortPullRequests(prs: GhPullRequest[], sort: string): GhPullRequ
     if (sort === "created_asc") return Date.parse(a.createdAt) - Date.parse(b.createdAt);
     if (sort === "comments_desc") return b.commentsCount - a.commentsCount;
     if (sort === "comments_asc") return a.commentsCount - b.commentsCount;
-    if (sort === "size_desc") return (b.additions + b.deletions) - (a.additions + a.deletions);
-    if (sort === "size_asc") return (a.additions + a.deletions) - (b.additions + b.deletions);
-    if (sort === "files_desc") return b.changedFiles - a.changedFiles;
+    if (sort === "size_desc") return diffSize(b) - diffSize(a);
+    if (sort === "size_asc") return diffSize(a) - diffSize(b);
+    if (sort === "files_desc") return (b.changedFiles ?? 0) - (a.changedFiles ?? 0);
     if (sort === "review_pending") {
       const aPending = a.reviewsCount === 0 && !a.isDraft ? 1 : 0;
       const bPending = b.reviewsCount === 0 && !b.isDraft ? 1 : 0;

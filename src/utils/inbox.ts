@@ -194,9 +194,11 @@ function buildPullRequestInboxItem(pr: GhPullRequest, userLogin: string, now: nu
     score += 6;
     reasons.push(reason("new", "New PR", "default"));
   }
-  if (pr.changedFiles >= 12 || pr.additions + pr.deletions >= 500) {
+  const changedFiles = pr.changedFiles ?? 0;
+  const lineCount = (pr.additions ?? 0) + (pr.deletions ?? 0);
+  if (changedFiles >= 12 || (pr.additions != null && pr.deletions != null && lineCount >= 500)) {
     score += 10;
-    reasons.push(reason("large-diff", `${pr.changedFiles} files changed`, "warning"));
+    reasons.push(reason("large-diff", `${changedFiles} files changed`, "warning"));
   }
 
   if (!reasons.length) reasons.push(reason("new", status, "default"));
@@ -222,7 +224,9 @@ function buildPullRequestInboxItem(pr: GhPullRequest, userLogin: string, now: nu
     isDraft: pr.isDraft,
     reviewDecision: pr.reviewDecision,
     branch: { head: pr.headRefName, base: pr.baseRefName },
-    diff: { additions: pr.additions, deletions: pr.deletions, changedFiles: pr.changedFiles },
+    diff: pr.additions != null && pr.deletions != null
+      ? { additions: pr.additions, deletions: pr.deletions, changedFiles: pr.changedFiles ?? 0 }
+      : undefined,
     headCheck: pr.headCheck ?? null,
   };
 }
