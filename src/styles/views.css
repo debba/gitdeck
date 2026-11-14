@@ -196,6 +196,16 @@
     min-width: 0;
   }
 
+  .data-row-main {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .data-row-main:hover { text-decoration: none; }
+
   .data-row-top {
     display: flex;
     align-items: baseline;
@@ -394,6 +404,21 @@
   .pr-badge.review.pending {
     color: var(--tone-blue); background: rgba(88,166,255,0.10); border-color: rgba(88,166,255,0.25);
   }
+  .pr-badge.ci {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    text-decoration: none;
+  }
+  .pr-badge.ci svg { flex: 0 0 auto; }
+  .pr-badge.ci:hover { text-decoration: none; }
+  .pr-badge.ci.success { color: var(--tone-green); background: rgba(34,197,94,0.16); border-color: transparent; }
+  .pr-badge.ci.failed { color: var(--tone-red); background: rgba(239,68,68,0.16); border-color: transparent; }
+  .pr-badge.ci.running,
+  .pr-badge.ci.pending,
+  .pr-badge.ci.manual { color: var(--tone-amber); background: rgba(234,179,8,0.16); border-color: transparent; }
+  .pr-badge.ci.canceled,
+  .pr-badge.ci.skipped { color: var(--tone-slate); background: rgba(148,163,184,0.16); border-color: transparent; }
   .pr-diff {
     display: inline-flex; gap: 4px; align-items: center;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

@@ -21,6 +21,7 @@ import { MAX_PINNED_REPOSITORY_TABS, normalizePinnedRepositoryTabs } from "../..
 import type { RepositoryDetailTab } from "../../utils/repository";
 import { clampPage } from "../../utils/pagination";
 import { Pagination } from "../common/Pagination";
+import { PullRequestCheckBadge } from "../common/PullRequestCheckBadge";
 import { CloseIcon, ForkIcon, IssueIcon, PinIcon, RefreshIcon, StarIcon } from "../common/Icons";
 import { Markdown } from "../common/Markdown";
 import { useI18n } from "../../i18n/I18nProvider";
@@ -1290,11 +1291,14 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, issuesLoade
               <strong>{formatNumber(repoPullRequests.length)}</strong>
             </div>
             {pagedRepoPrs.map((pr) => (
-              <a className="repo-detail-issue" href={pr.url} target="_blank" rel="noreferrer" key={pr.url}>
-                <span>#{pr.number}</span>
-                <strong>{pr.title}</strong>
-                <em>{pr.isDraft ? t("list.draft") : pr.reviewDecision?.replace("_", " ").toLowerCase() || t("repoDetails.reviewPending")} · {formatRelativeTime(pr.updatedAt)}</em>
-              </a>
+              <div className="repo-detail-issue repo-detail-pr" key={pr.url}>
+                <a href={pr.url} target="_blank" rel="noreferrer">
+                  <span>#{pr.number}</span>
+                  <strong>{pr.title}</strong>
+                  <em>{pr.isDraft ? t("list.draft") : pr.reviewDecision?.replace("_", " ").toLowerCase() || t("repoDetails.reviewPending")} · {formatRelativeTime(pr.updatedAt)}</em>
+                </a>
+                {pr.headCheck ? <PullRequestCheckBadge check={pr.headCheck} /> : null}
+              </div>
             ))}
             {!repoPullRequests.length ? <div className="modal-empty sub">{t("repoDetails.noPullRequests")}</div> : null}
             {repoPullRequests.length ? (
