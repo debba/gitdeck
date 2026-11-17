@@ -267,6 +267,36 @@ export function filterPullRequests(prs: GhPullRequest[], filters: PullRequestFil
   });
 }
 
+export const PR_STALE_MS = 14 * 86_400_000;
+
+export interface PullRequestSummaryCounts {
+  open: number;
+  drafts: number;
+  awaitingReview: number;
+  approved: number;
+  stale: number;
+}
+
+/**
+ * Summary cards for the Pull Requests tab.
+ * Counts only the PRs passed in, so callers should pass the same filtered
+ * open list the page shows (archived repos excluded, current filters applied).
+ * Awaiting review and stale are therefore never larger than `open`.
+ */
+export function countPullRequestSummary(prs: GhPullRequest[], now = Date.now()): PullRequestSummaryCounts {
+  let drafts = 0;
+  let awaitingReview = 0;
+  let approved = 0;
+  let stale = 0;
+  for (const pr of prs) {
+    if (pr.isDraft) drafts += 1;
+    if (!pr.isDraft && pr.reviewsCount === 0) awaitingReview += 1;
+    if (pr.reviewDecision === "APPROVED") approved += 1;
+    if (now - new Date(pr.updatedAt).getTime() > PR_STALE_MS) stale += 1;
+  }
+  return { open: prs.length, drafts, awaitingReview, approved, stale };
+}
+
 function diffSize(pr: GhPullRequest): number {
   return (pr.additions ?? 0) + (pr.deletions ?? 0);
 }

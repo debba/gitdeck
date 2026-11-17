@@ -50,6 +50,7 @@ import {
   filterIssues,
   filterPullRequests,
   filterRepos,
+  countPullRequestSummary,
   sortIssues,
   sortPullRequests,
   sortRepos,
@@ -588,10 +589,11 @@ export function App() {
     return () => controller.abort();
   }, [tab, authState, activeAccountId, repoInsightTargetKey]);
 
-  const draftCount = pullRequests.filter((pr) => pr.isDraft).length;
-  const awaitingReviewCount = pullRequests.filter((pr) => !pr.isDraft && pr.reviewsCount === 0).length;
-  const approvedCount = pullRequests.filter((pr) => pr.reviewDecision === "APPROVED").length;
-  const stalePrCount = pullRequests.filter((pr) => Date.now() - new Date(pr.updatedAt).getTime() > 14 * 86_400_000).length;
+  const prSummary = countPullRequestSummary(filteredPullRequests);
+  const draftCount = prSummary.drafts;
+  const awaitingReviewCount = prSummary.awaitingReview;
+  const approvedCount = prSummary.approved;
+  const stalePrCount = prSummary.stale;
   const averageHealth = repoInsights.length ? Math.round(repoInsights.reduce((sum, insight) => sum + insight.healthScore, 0) / repoInsights.length) : 0;
   const totalAlerts = repoInsights.reduce((sum, insight) => sum + insight.alerts.length, 0);
   const totalSecurityAlerts = repoInsights.reduce((sum, insight) => sum + insight.securityAlertsCount, 0);
@@ -817,7 +819,7 @@ export function App() {
             <div className="view-prs" style={{ display: "block" }}>
               <section className="stats">
                 <div className="stat"><div className="k">{t("stats.openPrs")}</div><div className="v">{countText(filteredPullRequests.length, prsLoaded)}</div><div className="sub">{t("stats.matchingFilters")}</div></div>
-                <div className="stat"><div className="k">{t("stats.drafts")}</div><div className="v">{countText(draftCount, prsLoaded)}</div><div className="sub">{t("stats.acrossAllPrs")}</div></div>
+                <div className="stat"><div className="k">{t("stats.drafts")}</div><div className="v">{countText(draftCount, prsLoaded)}</div><div className="sub">{t("stats.matchingFilters")}</div></div>
                 <div className="stat"><div className="k">{t("stats.awaitingReview")}</div><div className="v">{countText(awaitingReviewCount, prsLoaded)}</div><div className="sub">{t("stats.noReviewYet")}</div></div>
                 <div className="stat"><div className="k">{t("stats.approved")}</div><div className="v">{countText(approvedCount, prsLoaded)}</div><div className="sub">{t("stats.readyToMerge")}</div></div>
                 <div className="stat"><div className="k">{t("stats.stale14")}</div><div className="v">{countText(stalePrCount, prsLoaded)}</div><div className="sub">{t("stats.noRecentActivity")}</div></div>

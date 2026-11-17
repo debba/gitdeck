@@ -5,6 +5,7 @@ import {
   filterIssues,
   filterPullRequests,
   filterRepos,
+  countPullRequestSummary,
   matchesPullRequestPreset,
   sortIssues,
   sortPullRequests,
@@ -482,5 +483,91 @@ describe("dashboard utilities", () => {
     const bySize = sortPullRequests(pullRequests, "size_desc").map((pr) => pr.number);
     expect(bySize[0]).toBe(10);
     expect(bySize[bySize.length - 1]).toBe(4);
+  });
+
+  it("counts pull request summary cards from the provided list only", () => {
+    const now = Date.parse("2026-04-30T12:00:00Z");
+    const counts = countPullRequestSummary(pullRequests, now);
+
+    expect(counts).toEqual({
+      open: 3,
+      drafts: 1,
+      awaitingReview: 1,
+      approved: 1,
+      stale: 1,
+    });
+    expect(counts.awaitingReview).toBeLessThanOrEqual(counts.open);
+    expect(counts.stale).toBeLessThanOrEqual(counts.open);
+    expect(counts.drafts).toBeLessThanOrEqual(counts.open);
+    expect(counts.approved).toBeLessThanOrEqual(counts.open);
+  });
+
+  it("does not let stale or awaiting-review cards exceed the filtered open count", () => {
+    const now = Date.parse("2026-04-30T12:00:00Z");
+    const emptyFilters = {
+      search: "",
+      orgs: new Set<string>(),
+      repos: new Set<string>(),
+      labels: new Set<string>(),
+      authors: new Set<string>(),
+      excludedAuthors: new Set<string>(),
+      authorMode: "include" as const,
+      assignees: new Set<string>(),
+      dates: { cf: "", ct: "", uf: "", ut: "" },
+      preset: "",
+    };
+    const archivedStale = {
+      ...pullRequests[2],
+      number: 469,
+      title: "Archived project change",
+      url: "https://gitlab.com/placeholder/python-api/-/merge_requests/469",
+      repository: { name: "python-api", nameWithOwner: "placeholder/python-api" },
+      isDraft: false,
+      reviewDecision: null,
+      reviewsCount: 0,
+      updatedAt: "2026-03-01T10:00:00Z",
+    };
+    const loaded = [...pullRequests, archivedStale];
+    const raw = countPullRequestSummary(loaded, now);
+    const filtered = countPullRequestSummary(
+      filterPullRequests(loaded, emptyFilters, "alice", new Set(["placeholder/python-api"])),
+      now,
+    );
+
+    expect(raw.open).toBe(4);
+    expect(raw.awaitingReview).toBe(2);
+    expect(raw.stale).toBe(2);
+    expect(filtered.open).toBe(3);
+    expect(filtered.awaitingReview).toBe(1);
+    expect(filtered.stale).toBe(1);
+    expect(filtered.awaitingReview).toBeLessThanOrEqual(filtered.open);
+    expect(filtered.stale).toBeLessThanOrEqual(filtered.open);
+  });
+
+  it("applies the current search and org filters to every summary card", () => {
+    const now = Date.parse("2026-04-30T12:00:00Z");
+    const filtered = countPullRequestSummary(
+      filterPullRequests(pullRequests, {
+        search: "router",
+        orgs: new Set(["acme"]),
+        repos: new Set<string>(),
+        labels: new Set<string>(),
+        authors: new Set<string>(),
+        excludedAuthors: new Set<string>(),
+        authorMode: "include",
+        assignees: new Set<string>(),
+        dates: { cf: "", ct: "", uf: "", ut: "" },
+        preset: "",
+      }, "alice"),
+      now,
+    );
+
+    expect(filtered).toEqual({
+      open: 1,
+      drafts: 0,
+      awaitingReview: 1,
+      approved: 0,
+      stale: 0,
+    });
   });
 });
