@@ -46,7 +46,7 @@ import { buildInboxItems, INBOX_MAILBOXES, matchesInboxMailbox, mergeNotificatio
 import {
   buildIssueFacets,
   buildPullRequestFacets,
-  buildRepoFacets,
+  countRepoFacets,
   filterIssues,
   filterPullRequests,
   filterRepos,
@@ -514,7 +514,7 @@ export function App() {
     () => ({ ...buildPullRequestFacets(pullRequestsForFacets), orgs: buildPullRequestFacets(nonArchivedPullRequests).orgs }),
     [pullRequestsForFacets, nonArchivedPullRequests],
   );
-  const repoFacets = useMemo(() => buildRepoFacets(repos), [repos]);
+  const repoFacets = useMemo(() => countRepoFacets(repos, issues, repoFilters), [repos, issues, repoFilters]);
   const boardFilterAvailable = useMemo(() => hasBoards(nonArchivedIssues), [nonArchivedIssues]);
   const insightsByRepo = useMemo(() => new Map(repoInsights.map((insight) => [insight.repo, insight])), [repoInsights]);
   const filteredIssues = useMemo(() => sortIssues(filterIssues(nonArchivedIssues, issueFilters, userLogin), issueSort), [nonArchivedIssues, issueFilters, issueSort, userLogin]);

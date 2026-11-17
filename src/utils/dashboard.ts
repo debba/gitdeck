@@ -212,6 +212,21 @@ export function filterRepos(repos: GhRepo[], issues: GhIssue[], filters: RepoFil
   });
 }
 
+/**
+ * Sidebar org and language counts for the Repositories tab.
+ * Uses the same filterRepos rules as the main list (archived hidden by default),
+ * with the usual faceted-search exception: each facet ignores its own selection
+ * but still respects the other filters.
+ */
+export function countRepoFacets(repos: GhRepo[], issues: GhIssue[], filters: RepoFilters) {
+  const withoutOrgs = filterRepos(repos, issues, { ...filters, orgs: new Set() });
+  const withoutLanguages = filterRepos(repos, issues, { ...filters, languages: new Set() });
+  return {
+    orgs: buildRepoFacets(withoutOrgs).orgs,
+    languages: buildRepoFacets(withoutLanguages).languages,
+  };
+}
+
 export function matchesPullRequestPreset(pr: GhPullRequest, preset: string, userLogin: string, now = Date.now()): boolean {
   if (!preset) return true;
   if (preset === "assigned-me") return !!userLogin && (pr.assignees || []).some((assignee) => assignee.login === userLogin);

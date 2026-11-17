@@ -5,6 +5,7 @@ import {
   filterIssues,
   filterPullRequests,
   filterRepos,
+  countRepoFacets,
   countPullRequestSummary,
   matchesPullRequestPreset,
   sortIssues,
@@ -569,5 +570,110 @@ describe("dashboard utilities", () => {
       approved: 0,
       stale: 0,
     });
+  });
+
+  it("counts repo sidebar facets from the same list as the main view, hiding archived repos by default", () => {
+    const archived = {
+      ...repos[0],
+      nameWithOwner: "acme/legacy",
+      name: "legacy",
+      description: "Archived app",
+      isArchived: true,
+      primaryLanguage: { name: "TypeScript" },
+      url: "https://github.com/acme/legacy",
+    };
+    const otherOrg = {
+      ...repos[0],
+      nameWithOwner: "other/tools",
+      name: "tools",
+      owner: { login: "other" },
+      description: "Tools",
+      primaryLanguage: { name: "Python" },
+      url: "https://github.com/other/tools",
+    };
+    const loaded = [...repos, archived, otherOrg];
+    const baseFilters = {
+      search: "",
+      orgs: new Set<string>(),
+      languages: new Set<string>(),
+      visibility: "all" as const,
+      includeForks: true,
+      includeArchived: false,
+    };
+
+    const raw = {
+      orgs: new Map<string, number>(),
+      languages: new Map<string, number>(),
+    };
+    // document the bug: counting the unfiltered list includes archived repos
+    for (const repo of loaded) {
+      raw.orgs.set(repo.owner.login, (raw.orgs.get(repo.owner.login) || 0) + 1);
+      const language = repo.primaryLanguage?.name || "—";
+      raw.languages.set(language, (raw.languages.get(language) || 0) + 1);
+    }
+    expect(raw.orgs.get("acme")).toBe(3);
+    expect(raw.languages.get("TypeScript")).toBe(2);
+
+    const facets = countRepoFacets(loaded, issues, baseFilters);
+    expect(facets.orgs.get("acme")).toBe(2);
+    expect(facets.orgs.get("other")).toBe(1);
+    expect(facets.languages.get("TypeScript")).toBe(1);
+    expect(facets.languages.get("Go")).toBe(1);
+    expect(facets.languages.get("Python")).toBe(1);
+    expect(facets.orgs.get("acme")).toBeLessThan(raw.orgs.get("acme")!);
+  });
+
+  it("lets each repo facet ignore its own selection but honor the other filters", () => {
+    const archived = {
+      ...repos[0],
+      nameWithOwner: "acme/legacy",
+      name: "legacy",
+      description: "Archived app",
+      isArchived: true,
+      primaryLanguage: { name: "TypeScript" },
+      url: "https://github.com/acme/legacy",
+    };
+    const otherOrg = {
+      ...repos[0],
+      nameWithOwner: "other/tools",
+      name: "tools",
+      owner: { login: "other" },
+      description: "Tools",
+      primaryLanguage: { name: "Python" },
+      url: "https://github.com/other/tools",
+    };
+    const loaded = [...repos, archived, otherOrg];
+
+    const orgSelected = countRepoFacets(loaded, issues, {
+      search: "",
+      orgs: new Set(["acme"]),
+      languages: new Set(),
+      visibility: "all",
+      includeForks: true,
+      includeArchived: false,
+    });
+    // Org counts ignore the org selection, so other orgs stay visible.
+    expect(orgSelected.orgs.get("acme")).toBe(2);
+    expect(orgSelected.orgs.get("other")).toBe(1);
+    // Language counts respect the org filter and still hide archived repos.
+    expect(orgSelected.languages.get("TypeScript")).toBe(1);
+    expect(orgSelected.languages.get("Go")).toBe(1);
+    expect(orgSelected.languages.has("Python")).toBe(false);
+
+    const languageSelected = countRepoFacets(loaded, issues, {
+      search: "",
+      orgs: new Set(),
+      languages: new Set(["Go"]),
+      visibility: "all",
+      includeForks: true,
+      includeArchived: false,
+    });
+    // Language counts ignore the language selection.
+    expect(languageSelected.languages.get("TypeScript")).toBe(1);
+    expect(languageSelected.languages.get("Go")).toBe(1);
+    expect(languageSelected.languages.get("Python")).toBe(1);
+    // Org counts respect the language filter: only acme has Go.
+    expect(languageSelected.orgs.get("acme")).toBe(1);
+    expect(languageSelected.orgs.has("other")).toBe(false);
   });
 });
