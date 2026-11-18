@@ -52,6 +52,7 @@ async function fetchInsightForRepo(repo: GhRepo, issues: GhIssue[]): Promise<Rep
     latestReleasePublishedAt,
     securityAlertsCount: security.totalOpen,
     securityAlertsUnavailable: security.unavailable,
+    vulnerabilityAlertsStatus: security.vulnerabilityAlertsStatus,
   });
 }
 

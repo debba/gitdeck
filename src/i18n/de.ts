@@ -308,6 +308,8 @@ export const de: Partial<Record<keyof typeof en, string>> = {
   "insights.securityAlerts": "{count} Sicherheitswarnungen",
   "insights.securityStatus": "Sicherheitsstatus",
   "insights.securityUnavailable": "Die Sicherheitswarnungen konnten nicht vollständig geladen werden.",
+  "insights.securityAlertsOff": "Warnungen aus",
+  "insights.securityAlertsUnknown": "Der Dependabot-Warnungsstatus ist unbekannt.",
   "alerts.emptyTitle": "Keine Sicherheitswarnungen",
   "alerts.emptyText": "Versuche einen anderen Repository-Filter oder aktualisiere das Dashboard.",
   "alerts.totalAlerts": "Sicherheitswarnungen",

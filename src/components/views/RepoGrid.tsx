@@ -83,7 +83,7 @@ export function RepoGrid({ repos, issues, insightsByRepo, onRepoClick, onIssuesC
               <div className="repo-health-row">
                 <span className={`repo-health-pill ${insight.healthLabel}`}>{t("repo.health", { score: insight.healthScore })}</span>
                 {insight.alerts[0] ? <span className="repo-health-note">{insight.alerts[0]}</span> : insight.opportunities[0] ? <span className="repo-health-note">{insight.opportunities[0]}</span> : null}
-                {insight.securityAlertsCount > 0 ? <span className="repo-health-note">{t("insights.securityAlerts", { count: formatNumber(insight.securityAlertsCount) })}</span> : insight.securityAlertsUnavailable ? <span className="repo-health-note">{t("insights.securityUnavailable")}</span> : null}
+                {insight.securityAlertsCount > 0 ? <span className="repo-health-note">{t("insights.securityAlerts", { count: formatNumber(insight.securityAlertsCount) })}</span> : insight.vulnerabilityAlertsStatus === "disabled" ? <span className="repo-health-note">{t("insights.securityAlertsOff")}</span> : insight.securityAlertsUnavailable ? <span className="repo-health-note">{t("insights.securityUnavailable")}</span> : insight.vulnerabilityAlertsStatus === "unknown" ? <span className="repo-health-note">{t("insights.securityAlertsUnknown")}</span> : null}
               </div>
             ) : null}
             <div className="rc-stats">

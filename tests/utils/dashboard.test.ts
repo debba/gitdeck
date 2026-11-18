@@ -5,6 +5,8 @@ import {
   filterIssues,
   filterPullRequests,
   filterRepos,
+  countRepoFacets,
+  countPullRequestSummary,
   matchesPullRequestPreset,
   sortIssues,
   sortPullRequests,
@@ -378,6 +380,7 @@ describe("dashboard utilities", () => {
         healthLabel: "strong",
         securityAlertsCount: 0,
         securityAlertsUnavailable: false,
+        vulnerabilityAlertsStatus: "enabled",
         alerts: [],
         opportunities: [],
         correlations: [],
@@ -400,6 +403,7 @@ describe("dashboard utilities", () => {
         healthLabel: "risky",
         securityAlertsCount: 1,
         securityAlertsUnavailable: false,
+        vulnerabilityAlertsStatus: "enabled",
         alerts: ["risk"],
         opportunities: [],
         correlations: [],
@@ -482,5 +486,196 @@ describe("dashboard utilities", () => {
     const bySize = sortPullRequests(pullRequests, "size_desc").map((pr) => pr.number);
     expect(bySize[0]).toBe(10);
     expect(bySize[bySize.length - 1]).toBe(4);
+  });
+
+  it("counts pull request summary cards from the provided list only", () => {
+    const now = Date.parse("2026-04-30T12:00:00Z");
+    const counts = countPullRequestSummary(pullRequests, now);
+
+    expect(counts).toEqual({
+      open: 3,
+      drafts: 1,
+      awaitingReview: 1,
+      approved: 1,
+      stale: 1,
+    });
+    expect(counts.awaitingReview).toBeLessThanOrEqual(counts.open);
+    expect(counts.stale).toBeLessThanOrEqual(counts.open);
+    expect(counts.drafts).toBeLessThanOrEqual(counts.open);
+    expect(counts.approved).toBeLessThanOrEqual(counts.open);
+  });
+
+  it("does not let stale or awaiting-review cards exceed the filtered open count", () => {
+    const now = Date.parse("2026-04-30T12:00:00Z");
+    const emptyFilters = {
+      search: "",
+      orgs: new Set<string>(),
+      repos: new Set<string>(),
+      labels: new Set<string>(),
+      authors: new Set<string>(),
+      excludedAuthors: new Set<string>(),
+      authorMode: "include" as const,
+      assignees: new Set<string>(),
+      dates: { cf: "", ct: "", uf: "", ut: "" },
+      preset: "",
+    };
+    const archivedStale = {
+      ...pullRequests[2],
+      number: 469,
+      title: "Archived project change",
+      url: "https://gitlab.com/placeholder/python-api/-/merge_requests/469",
+      repository: { name: "python-api", nameWithOwner: "placeholder/python-api" },
+      isDraft: false,
+      reviewDecision: null,
+      reviewsCount: 0,
+      updatedAt: "2026-03-01T10:00:00Z",
+    };
+    const loaded = [...pullRequests, archivedStale];
+    const raw = countPullRequestSummary(loaded, now);
+    const filtered = countPullRequestSummary(
+      filterPullRequests(loaded, emptyFilters, "alice", new Set(["placeholder/python-api"])),
+      now,
+    );
+
+    expect(raw.open).toBe(4);
+    expect(raw.awaitingReview).toBe(2);
+    expect(raw.stale).toBe(2);
+    expect(filtered.open).toBe(3);
+    expect(filtered.awaitingReview).toBe(1);
+    expect(filtered.stale).toBe(1);
+    expect(filtered.awaitingReview).toBeLessThanOrEqual(filtered.open);
+    expect(filtered.stale).toBeLessThanOrEqual(filtered.open);
+  });
+
+  it("applies the current search and org filters to every summary card", () => {
+    const now = Date.parse("2026-04-30T12:00:00Z");
+    const filtered = countPullRequestSummary(
+      filterPullRequests(pullRequests, {
+        search: "router",
+        orgs: new Set(["acme"]),
+        repos: new Set<string>(),
+        labels: new Set<string>(),
+        authors: new Set<string>(),
+        excludedAuthors: new Set<string>(),
+        authorMode: "include",
+        assignees: new Set<string>(),
+        dates: { cf: "", ct: "", uf: "", ut: "" },
+        preset: "",
+      }, "alice"),
+      now,
+    );
+
+    expect(filtered).toEqual({
+      open: 1,
+      drafts: 0,
+      awaitingReview: 1,
+      approved: 0,
+      stale: 0,
+    });
+  });
+
+  it("counts repo sidebar facets from the same list as the main view, hiding archived repos by default", () => {
+    const archived = {
+      ...repos[0],
+      nameWithOwner: "acme/legacy",
+      name: "legacy",
+      description: "Archived app",
+      isArchived: true,
+      primaryLanguage: { name: "TypeScript" },
+      url: "https://github.com/acme/legacy",
+    };
+    const otherOrg = {
+      ...repos[0],
+      nameWithOwner: "other/tools",
+      name: "tools",
+      owner: { login: "other" },
+      description: "Tools",
+      primaryLanguage: { name: "Python" },
+      url: "https://github.com/other/tools",
+    };
+    const loaded = [...repos, archived, otherOrg];
+    const baseFilters = {
+      search: "",
+      orgs: new Set<string>(),
+      languages: new Set<string>(),
+      visibility: "all" as const,
+      includeForks: true,
+      includeArchived: false,
+    };
+
+    const raw = {
+      orgs: new Map<string, number>(),
+      languages: new Map<string, number>(),
+    };
+    // document the bug: counting the unfiltered list includes archived repos
+    for (const repo of loaded) {
+      raw.orgs.set(repo.owner.login, (raw.orgs.get(repo.owner.login) || 0) + 1);
+      const language = repo.primaryLanguage?.name || "—";
+      raw.languages.set(language, (raw.languages.get(language) || 0) + 1);
+    }
+    expect(raw.orgs.get("acme")).toBe(3);
+    expect(raw.languages.get("TypeScript")).toBe(2);
+
+    const facets = countRepoFacets(loaded, issues, baseFilters);
+    expect(facets.orgs.get("acme")).toBe(2);
+    expect(facets.orgs.get("other")).toBe(1);
+    expect(facets.languages.get("TypeScript")).toBe(1);
+    expect(facets.languages.get("Go")).toBe(1);
+    expect(facets.languages.get("Python")).toBe(1);
+    expect(facets.orgs.get("acme")).toBeLessThan(raw.orgs.get("acme")!);
+  });
+
+  it("lets each repo facet ignore its own selection but honor the other filters", () => {
+    const archived = {
+      ...repos[0],
+      nameWithOwner: "acme/legacy",
+      name: "legacy",
+      description: "Archived app",
+      isArchived: true,
+      primaryLanguage: { name: "TypeScript" },
+      url: "https://github.com/acme/legacy",
+    };
+    const otherOrg = {
+      ...repos[0],
+      nameWithOwner: "other/tools",
+      name: "tools",
+      owner: { login: "other" },
+      description: "Tools",
+      primaryLanguage: { name: "Python" },
+      url: "https://github.com/other/tools",
+    };
+    const loaded = [...repos, archived, otherOrg];
+
+    const orgSelected = countRepoFacets(loaded, issues, {
+      search: "",
+      orgs: new Set(["acme"]),
+      languages: new Set(),
+      visibility: "all",
+      includeForks: true,
+      includeArchived: false,
+    });
+    // Org counts ignore the org selection, so other orgs stay visible.
+    expect(orgSelected.orgs.get("acme")).toBe(2);
+    expect(orgSelected.orgs.get("other")).toBe(1);
+    // Language counts respect the org filter and still hide archived repos.
+    expect(orgSelected.languages.get("TypeScript")).toBe(1);
+    expect(orgSelected.languages.get("Go")).toBe(1);
+    expect(orgSelected.languages.has("Python")).toBe(false);
+
+    const languageSelected = countRepoFacets(loaded, issues, {
+      search: "",
+      orgs: new Set(),
+      languages: new Set(["Go"]),
+      visibility: "all",
+      includeForks: true,
+      includeArchived: false,
+    });
+    // Language counts ignore the language selection.
+    expect(languageSelected.languages.get("TypeScript")).toBe(1);
+    expect(languageSelected.languages.get("Go")).toBe(1);
+    expect(languageSelected.languages.get("Python")).toBe(1);
+    // Org counts respect the language filter: only acme has Go.
+    expect(languageSelected.orgs.get("acme")).toBe(1);
+    expect(languageSelected.orgs.has("other")).toBe(false);
   });
 });

@@ -212,6 +212,21 @@ export function filterRepos(repos: GhRepo[], issues: GhIssue[], filters: RepoFil
   });
 }
 
+/**
+ * Sidebar org and language counts for the Repositories tab.
+ * Uses the same filterRepos rules as the main list (archived hidden by default),
+ * with the usual faceted-search exception: each facet ignores its own selection
+ * but still respects the other filters.
+ */
+export function countRepoFacets(repos: GhRepo[], issues: GhIssue[], filters: RepoFilters) {
+  const withoutOrgs = filterRepos(repos, issues, { ...filters, orgs: new Set() });
+  const withoutLanguages = filterRepos(repos, issues, { ...filters, languages: new Set() });
+  return {
+    orgs: buildRepoFacets(withoutOrgs).orgs,
+    languages: buildRepoFacets(withoutLanguages).languages,
+  };
+}
+
 export function matchesPullRequestPreset(pr: GhPullRequest, preset: string, userLogin: string, now = Date.now()): boolean {
   if (!preset) return true;
   if (preset === "assigned-me") return !!userLogin && (pr.assignees || []).some((assignee) => assignee.login === userLogin);
@@ -265,6 +280,36 @@ export function filterPullRequests(prs: GhPullRequest[], filters: PullRequestFil
     ].join(" ").toLowerCase();
     return haystack.includes(query);
   });
+}
+
+export const PR_STALE_MS = 14 * 86_400_000;
+
+export interface PullRequestSummaryCounts {
+  open: number;
+  drafts: number;
+  awaitingReview: number;
+  approved: number;
+  stale: number;
+}
+
+/**
+ * Summary cards for the Pull Requests tab.
+ * Counts only the PRs passed in, so callers should pass the same filtered
+ * open list the page shows (archived repos excluded, current filters applied).
+ * Awaiting review and stale are therefore never larger than `open`.
+ */
+export function countPullRequestSummary(prs: GhPullRequest[], now = Date.now()): PullRequestSummaryCounts {
+  let drafts = 0;
+  let awaitingReview = 0;
+  let approved = 0;
+  let stale = 0;
+  for (const pr of prs) {
+    if (pr.isDraft) drafts += 1;
+    if (!pr.isDraft && pr.reviewsCount === 0) awaitingReview += 1;
+    if (pr.reviewDecision === "APPROVED") approved += 1;
+    if (now - new Date(pr.updatedAt).getTime() > PR_STALE_MS) stale += 1;
+  }
+  return { open: prs.length, drafts, awaitingReview, approved, stale };
 }
 
 function diffSize(pr: GhPullRequest): number {

@@ -43,7 +43,7 @@ export async function recordDailyDigest(repos: GhRepo[], issues: GhIssue[]): Pro
         const summary = await fetchRepoSecuritySummary(repo.nameWithOwner);
         return [repo.nameWithOwner, summary] as const;
       } catch {
-        return [repo.nameWithOwner, { dependabotOpen: 0, codeScanningOpen: 0, totalOpen: 0, latestUpdatedAt: null, unavailable: true }] as const;
+        return [repo.nameWithOwner, { dependabotOpen: 0, codeScanningOpen: 0, totalOpen: 0, latestUpdatedAt: null, unavailable: true, vulnerabilityAlertsStatus: "unknown" }] as const;
       }
     }),
   );

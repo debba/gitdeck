@@ -41,13 +41,13 @@ export function InsightsView({
               <span>{t("insights.stale", { count: insight.staleIssueCount })}</span>
               <span>{t("insights.views", { count: formatNumber(insight.viewsCount) })}</span>
               <span>{t("insights.downloads", { count: formatNumber(insight.totalDownloads) })}</span>
-              {insight.securityAlertsCount > 0 ? <span>{t("insights.securityAlerts", { count: formatNumber(insight.securityAlertsCount) })}</span> : null}
+              {insight.securityAlertsCount > 0 ? <span>{t("insights.securityAlerts", { count: formatNumber(insight.securityAlertsCount) })}</span> : insight.vulnerabilityAlertsStatus === "disabled" ? <span>{t("insights.securityAlertsOff")}</span> : null}
               <span>{t("repo.pushed", { time: repo.pushedAt ? formatRelativeTime(repo.pushedAt, Date.now(), language) : "-" })}</span>
             </div>
-            {insight.securityAlertsUnavailable ? (
+            {insight.securityAlertsUnavailable || insight.vulnerabilityAlertsStatus === "unknown" ? (
               <div className="insight-section">
                 <h4>{t("insights.securityStatus")}</h4>
-                <p>{t("insights.securityUnavailable")}</p>
+                <p>{insight.securityAlertsUnavailable ? t("insights.securityUnavailable") : t("insights.securityAlertsUnknown")}</p>
               </div>
             ) : null}
             {insight.alerts.length ? (

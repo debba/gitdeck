@@ -1,12 +1,16 @@
+export type VulnerabilityAlertsStatus = "enabled" | "disabled" | "unknown";
+
 export interface RepoSecurityAlertLike {
   updated_at?: string | null;
   updatedAt?: string | null;
+  state?: string | null;
 }
 
 export interface RepoSecuritySummaryInput {
   dependabotAlerts: RepoSecurityAlertLike[];
   codeScanningAlerts: RepoSecurityAlertLike[];
   unavailable?: boolean;
+  vulnerabilityAlertsStatus?: VulnerabilityAlertsStatus;
 }
 
 export interface RepoSecuritySummary {
@@ -15,6 +19,11 @@ export interface RepoSecuritySummary {
   totalOpen: number;
   latestUpdatedAt: string | null;
   unavailable: boolean;
+  vulnerabilityAlertsStatus: VulnerabilityAlertsStatus;
+}
+
+function isOpenAlert(item: RepoSecurityAlertLike): boolean {
+  return item.state == null || item.state === "open";
 }
 
 function latestTimestamp(items: RepoSecurityAlertLike[]): string | null {
@@ -30,9 +39,14 @@ function latestTimestamp(items: RepoSecurityAlertLike[]): string | null {
 }
 
 export function buildRepoSecuritySummary(input: RepoSecuritySummaryInput): RepoSecuritySummary {
-  const dependabotOpen = input.dependabotAlerts.length;
-  const codeScanningOpen = input.codeScanningAlerts.length;
-  const latestUpdatedAt = latestTimestamp([...input.dependabotAlerts, ...input.codeScanningAlerts]);
+  const vulnerabilityAlertsStatus = input.vulnerabilityAlertsStatus ?? "enabled";
+  const dependabotAlerts = vulnerabilityAlertsStatus === "disabled"
+    ? []
+    : input.dependabotAlerts.filter(isOpenAlert);
+  const codeScanningAlerts = input.codeScanningAlerts.filter(isOpenAlert);
+  const dependabotOpen = dependabotAlerts.length;
+  const codeScanningOpen = codeScanningAlerts.length;
+  const latestUpdatedAt = latestTimestamp([...dependabotAlerts, ...codeScanningAlerts]);
 
   return {
     dependabotOpen,
@@ -40,5 +54,6 @@ export function buildRepoSecuritySummary(input: RepoSecuritySummaryInput): RepoS
     totalOpen: dependabotOpen + codeScanningOpen,
     latestUpdatedAt,
     unavailable: Boolean(input.unavailable),
+    vulnerabilityAlertsStatus,
   };
 }
