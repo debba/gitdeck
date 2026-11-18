@@ -1,4 +1,4 @@
-import type { GhIssue, GhRepo, RepoInsight } from "../types/github";
+import type { GhIssue, GhRepo, RepoInsight, VulnerabilityAlertsStatus } from "../types/github";
 
 const DAY_MS = 86_400_000;
 const RECENT_RELEASE_DAYS = 30;
@@ -14,6 +14,7 @@ export interface RepoInsightInput {
   latestReleasePublishedAt?: string | null;
   securityAlertsCount?: number;
   securityAlertsUnavailable?: boolean;
+  vulnerabilityAlertsStatus?: VulnerabilityAlertsStatus;
   now?: number;
 }
 
@@ -43,6 +44,7 @@ export function buildRepoInsight(input: RepoInsightInput): RepoInsight {
   const latestReleasePublishedAt = input.latestReleasePublishedAt ?? null;
   const securityAlertsCount = input.securityAlertsCount ?? 0;
   const securityAlertsUnavailable = input.securityAlertsUnavailable ?? false;
+  const vulnerabilityAlertsStatus = input.vulnerabilityAlertsStatus ?? "enabled";
   const daysSinceRelease = latestReleasePublishedAt ? Math.floor((now - new Date(latestReleasePublishedAt).getTime()) / DAY_MS) : null;
 
   let healthScore = 78;
@@ -97,6 +99,7 @@ export function buildRepoInsight(input: RepoInsightInput): RepoInsight {
     healthLabel: healthScore >= 80 ? "strong" : healthScore >= 55 ? "watch" : "risky",
     securityAlertsCount,
     securityAlertsUnavailable,
+    vulnerabilityAlertsStatus,
     alerts,
     opportunities,
     correlations,

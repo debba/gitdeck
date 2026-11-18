@@ -308,6 +308,8 @@ export const zh: Partial<Record<keyof typeof en, string>> = {
   "insights.securityAlerts": "{count} 个安全告警",
   "insights.securityStatus": "安全状态",
   "insights.securityUnavailable": "安全告警未能完全加载。",
+  "insights.securityAlertsOff": "警报已关闭",
+  "insights.securityAlertsUnknown": "无法确认 Dependabot 警报状态。",
   "alerts.emptyTitle": "没有安全告警",
   "alerts.emptyText": "尝试不同的仓库筛选条件或刷新 dashboard。",
   "alerts.totalAlerts": "安全告警",

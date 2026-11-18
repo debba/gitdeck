@@ -798,10 +798,18 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, issuesLoade
             <div className="repo-detail-traffic-grid">
               <div className="repo-detail-traffic-card">
                 <span className="repo-detail-traffic-label">{t("repoDetails.dependabotAlerts")}</span>
-                <strong>{security ? formatNumber(security.dependabotOpen) : loading ? t("common.loading") : t("common.unavailable")}</strong>
+                <strong>
+                  {security
+                    ? (security.vulnerabilityAlertsStatus === "disabled" ? t("repoDetails.alertsOff") : formatNumber(security.dependabotOpen))
+                    : loading ? t("common.loading") : t("common.unavailable")}
+                </strong>
                 <em>
                   {security
-                    ? (security.dependabotOpen ? t("repoDetails.openDependencyAdvisories") : t("repoDetails.noDependencyAlerts"))
+                    ? (security.vulnerabilityAlertsStatus === "disabled"
+                      ? t("repoDetails.dependabotAlertsOff")
+                      : security.vulnerabilityAlertsStatus === "unknown"
+                        ? t("repoDetails.dependabotAlertsUnknown")
+                        : (security.dependabotOpen ? t("repoDetails.openDependencyAdvisories") : t("repoDetails.noDependencyAlerts")))
                     : t("repoDetails.loadingSecurity")}
                 </em>
               </div>
@@ -823,6 +831,10 @@ export function RepositoryDetailsModal({ repo, issues, pullRequests, issuesLoade
             {security?.unavailable ? (
               <div className="modal-info-banner">
                 Security alerts are not fully available with the current permissions or repository settings.
+              </div>
+            ) : security?.vulnerabilityAlertsStatus === "unknown" ? (
+              <div className="modal-info-banner">
+                {t("repoDetails.dependabotAlertsUnknown")}
               </div>
             ) : null}
           </section> : null}

@@ -305,12 +305,15 @@ export interface RepoWorkflowRun {
   updated_at: string;
 }
 
+export type VulnerabilityAlertsStatus = "enabled" | "disabled" | "unknown";
+
 export interface RepoSecuritySummary {
   dependabotOpen: number;
   codeScanningOpen: number;
   totalOpen: number;
   latestUpdatedAt: string | null;
   unavailable: boolean;
+  vulnerabilityAlertsStatus: VulnerabilityAlertsStatus;
 }
 
 export interface RepoDetailsData {
@@ -383,6 +386,7 @@ export interface RepoInsight {
   healthLabel: "strong" | "watch" | "risky";
   securityAlertsCount: number;
   securityAlertsUnavailable: boolean;
+  vulnerabilityAlertsStatus: VulnerabilityAlertsStatus;
   alerts: string[];
   opportunities: string[];
   correlations: string[];

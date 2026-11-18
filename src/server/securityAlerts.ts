@@ -1,6 +1,6 @@
-import { restApiPaginate } from "./githubClient";
+import { restApi, restApiPaginate } from "./githubClient";
 import { buildRepoSecuritySummary } from "../utils/security";
-import type { RepoSecuritySummary } from "../types/github";
+import type { RepoSecuritySummary, VulnerabilityAlertsStatus } from "../types/github";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -9,6 +9,7 @@ const inflightSummaries = new Map<string, Promise<RepoSecuritySummary>>();
 
 interface SecurityAlertRecord {
   updated_at?: string | null;
+  state?: string | null;
 }
 
 async function fetchOpenAlerts(path: string): Promise<{ alerts: SecurityAlertRecord[]; unavailable: boolean }> {
@@ -17,6 +18,13 @@ async function fetchOpenAlerts(path: string): Promise<{ alerts: SecurityAlertRec
     return { alerts: [], unavailable: true };
   }
   return { alerts: result.data, unavailable: false };
+}
+
+async function fetchVulnerabilityAlertsStatus(repo: string): Promise<VulnerabilityAlertsStatus> {
+  const result = await restApi(`/repos/${repo}/vulnerability-alerts`);
+  if (result.ok) return "enabled";
+  if (result.status === 404) return "disabled";
+  return "unknown";
 }
 
 export async function fetchRepoSecuritySummary(repo: string): Promise<RepoSecuritySummary> {
@@ -31,14 +39,17 @@ export async function fetchRepoSecuritySummary(repo: string): Promise<RepoSecuri
   }
 
   const promise = (async () => {
-    const [dependabot, codeScanning] = await Promise.all([
+    const [vulnerabilityAlertsStatus, dependabot, codeScanning] = await Promise.all([
+      fetchVulnerabilityAlertsStatus(repo),
       fetchOpenAlerts(`/repos/${repo}/dependabot/alerts?state=open&per_page=100`),
       fetchOpenAlerts(`/repos/${repo}/code-scanning/alerts?state=open&per_page=100`),
     ]);
+    const dependabotUnavailable = vulnerabilityAlertsStatus !== "disabled" && dependabot.unavailable;
     return buildRepoSecuritySummary({
       dependabotAlerts: dependabot.alerts,
       codeScanningAlerts: codeScanning.alerts,
-      unavailable: dependabot.unavailable || codeScanning.unavailable,
+      unavailable: dependabotUnavailable || codeScanning.unavailable,
+      vulnerabilityAlertsStatus,
     });
   })().finally(() => {
     inflightSummaries.delete(repo);
